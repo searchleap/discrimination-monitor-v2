@@ -13,8 +13,8 @@ A modern, scalable real-time monitoring system for tracking AI-related discrimin
 
 ```bash
 # Clone and install
-git clone https://github.com/searchleap/discrimination-monitor-v2.git
-cd discrimination-monitor-v2
+git clone https://github.com/searchleap/ai-discrimination-dashboard-v2.git
+cd ai-discrimination-dashboard-v2
 npm install
 
 # Environment setup
