@@ -315,6 +315,3 @@ For questions or issues:
 - **Dashboard Foundation**: Hero metrics, basic charts, filters, and article grid
 - **Database Schema**: Optimized PostgreSQL schema with proper indexing
 - **Testing**: RSS processing verification and build system validation
-
-🤖 Generated with [Memex](https://memex.tech)
-Co-Authored-By: Memex <noreply@memex.tech>
