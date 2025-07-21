@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export async function GET() {
   try {
@@ -16,10 +19,10 @@ export async function GET() {
 
     // Check database connection
     try {
-      // TODO: Add actual database connection check
-      // const result = await prisma.$queryRaw`SELECT 1`
+      await prisma.$queryRaw`SELECT 1`
       healthStatus.services.database = 'healthy'
     } catch (error) {
+      // Database connection failed - error logged in production logs
       healthStatus.services.database = 'unhealthy'
     }
 
