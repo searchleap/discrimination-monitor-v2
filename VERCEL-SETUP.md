@@ -4,7 +4,7 @@
 
 ### 1. Import Repository to Vercel
 - Go to [Vercel Dashboard](https://vercel.com/new)
-- Import: `https://github.com/searchleap/ai-discrimination-dashboard-v2`
+- Import: `https://github.com/searchleap/discrimination-monitor-v2`
 - Vercel will auto-detect Next.js framework
 
 ### 2. Set Environment Variables
@@ -133,5 +133,5 @@ After deployment, monitor:
 - [ ] Database accepts only encrypted connections
 
 ---
-**Repository**: https://github.com/searchleap/ai-discrimination-dashboard-v2
+**Repository**: https://github.com/searchleap/discrimination-monitor-v2
 **Status**: Ready for Production Deployment
