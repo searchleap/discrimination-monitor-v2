@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Feed {
+  id            String      @id @default(cuid())
+  name          String
+  url           String      @unique
+  category      FeedCategory
+  isActive      Boolean     @default(true)
+  lastFetched   DateTime?
+  status        FeedStatus  @default(ACTIVE)
+  errorMessage  String?
+  successRate   Float       @default(1.0)
+  
+  // Configuration
+  customHeaders Json?
+  processingRules Json?
+  priority      Int         @default(1)
+  
+  // Metadata
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relations
+  articles      Article[]
+  
+  @@index([category])
+  @@index([status])
+  @@index([isActive])
+}
+
+model Article {
+  id                String              @id @default(cuid())
+  title             String
+  content           String
+  summary           String?
+  url               String              @unique
+  publishedAt       DateTime
+  source            String
+  feedId            String
+  
+  // Normalized classifications
+  location          ArticleLocation
+  discriminationType DiscriminationType
+  severity          SeverityLevel
+  
+  // Extracted entities
+  organizations     String[]
+  keywords          String[]
+  entities          Json?               // JSON object with locations, people, organizations arrays
+  
+  // Processing metadata
+  processed         Boolean             @default(false)
+  processingError   String?
+  confidenceScore   Float?
+  aiClassification  Json?               // Store AI classification details
+  
+  // Timestamps
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  
+  // Relations
+  feed              Feed                @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  
+  @@index([location, publishedAt])
+  @@index([discriminationType])
+  @@index([severity, publishedAt])
+  @@index([source, publishedAt])
+  @@index([processed])
+  @@index([publishedAt])
+}
+
+model ProcessingLog {
+  id              String    @id @default(cuid())
+  type            String    // "RSS_FETCH", "AI_CLASSIFICATION", "DUPLICATE_CHECK"
+  status          String    // "SUCCESS", "ERROR", "WARNING"
+  message         String?
+  details         Json?
+  processingTime  Int?      // milliseconds
+  
+  // Relations
+  feedId          String?
+  articleId       String?
+  
+  createdAt       DateTime  @default(now())
+  
+  @@index([type, status])
+  @@index([createdAt])
+}
+
+model SystemMetrics {
+  id              String    @id @default(cuid())
+  date            DateTime  @unique @default(now())
+  
+  // Feed metrics
+  totalFeeds      Int
+  activeFeeds     Int
+  successfulFeeds Int
+  failedFeeds     Int
+  
+  // Article metrics
+  totalArticles   Int
+  michiganArticles Int
+  nationalArticles Int
+  internationalArticles Int
+  
+  // Processing metrics
+  avgProcessingTime Int    // milliseconds
+  classificationAccuracy Float?
+  duplicateDetectionRate Float?
+  
+  // User metrics
+  dailyActiveUsers Int?
+  exportDownloads Int?
+  
+  createdAt       DateTime  @default(now())
+  
+  @@index([date])
+}
+
+enum FeedCategory {
+  CIVIL_RIGHTS
+  GOVERNMENT
+  ACADEMIC
+  TECH_NEWS
+  LEGAL
+  HEALTHCARE
+  MICHIGAN_LOCAL
+  EMPLOYMENT
+  DATA_ETHICS
+  ADVOCACY
+}
+
+enum FeedStatus {
+  ACTIVE
+  ERROR
+  DISABLED
+  MAINTENANCE
+}
+
+enum ArticleLocation {
+  MICHIGAN
+  NATIONAL
+  INTERNATIONAL
+}
+
+enum DiscriminationType {
+  RACIAL
+  RELIGIOUS
+  DISABILITY
+  GENERAL_AI
+  MULTIPLE
+}
+
+enum SeverityLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
