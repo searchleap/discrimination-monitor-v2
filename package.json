@@ -15,9 +15,11 @@
     "test:a11y": "axe",
     "test:rss": "node scripts/test-rss.js",
     "db:push": "prisma db push",
-    "db:seed": "prisma db seed",
+    "db:seed": "prisma db seed", 
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:init": "node scripts/init-database.js",
+    "db:setup": "prisma generate && prisma db push && prisma db seed && node scripts/init-database.js"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
