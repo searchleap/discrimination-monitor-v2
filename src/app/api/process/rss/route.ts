@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     const feedIds = body.feedIds || null
     const maxFeeds = body.maxFeeds || 5 // Limit for manual processing
     
-    let results: any = {}
+    const results: any = {}
     
     if (feedIds && Array.isArray(feedIds)) {
       // Process specific feeds
@@ -86,7 +86,15 @@ export async function GET(request: NextRequest) {
       where: { type: 'RSS_FETCH' },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      include: { feedId: true }
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        message: true,
+        processingTime: true,
+        feedId: true,
+        createdAt: true
+      }
     })
     
     const avgProcessingTime = await prisma.processingLog.aggregate({

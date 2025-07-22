@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { RSSProcessor } from '@/lib/rss-processor'
-import { Feed } from '@/types'
+import { FeedCategory } from '@prisma/client'
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,43 +14,48 @@ export async function POST(request: NextRequest) {
     }
 
     // Create a temporary feed for testing
-    const testFeed: Feed = {
-      id: 'test-feed',
+    const testFeedData = {
+      id: 'test-feed-' + Date.now(),
       name: 'Test Feed',
       url: body.url,
-      category: 'TECH_NEWS',
+      category: FeedCategory.TECH_NEWS,
       isActive: true,
-      lastFetched: null,
-      status: 'ACTIVE',
-      errorMessage: null,
+      status: 'ACTIVE' as const,
       successRate: 1.0,
-      customHeaders: body.customHeaders || null,
-      processingRules: null,
       priority: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      ...(body.customHeaders && { customHeaders: body.customHeaders })
     }
 
+    // For testing, we'll use a simpler approach without database persistence
     const processor = new RSSProcessor()
-    const result = await processor.processFeed(testFeed)
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        feedUrl: body.url,
-        status: result.feed.status,
-        errorMessage: result.feed.errorMessage,
-        articlesFound: result.articles.length,
-        processingTime: result.processingTime,
-        errors: result.errors,
-        sampleArticles: result.articles.slice(0, 3).map(article => ({
-          title: article.title,
-          url: article.url,
-          publishedAt: article.publishedAt,
-          source: article.source
-        }))
-      }
+    
+    // First create the test feed in database temporarily for testing
+    const { prisma } = await import('@/lib/prisma')
+    const createdFeed = await prisma.feed.create({
+      data: testFeedData
     })
+    
+    try {
+      const result = await processor.processFeed(createdFeed.id)
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          feedUrl: body.url,
+          status: result.success ? 'ACTIVE' : 'ERROR',
+          errorMessage: result.errors.length > 0 ? result.errors[0] : null,
+          articlesFound: result.articlesProcessed,
+          newArticles: result.newArticles,
+          duplicates: result.duplicates,
+          errors: result.errors
+        }
+      })
+    } finally {
+      // Clean up test feed
+      await prisma.feed.delete({
+        where: { id: createdFeed.id }
+      }).catch(() => {}) // Ignore errors during cleanup
+    }
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error testing feed:', error)
