@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
@@ -56,11 +56,7 @@ export default function GeographicHeatMap({
   const [error, setError] = useState<string | null>(null)
 
   // Fetch geographic data
-  useEffect(() => {
-    fetchGeographicData()
-  }, [timeRange, category])
-
-  const fetchGeographicData = async () => {
+  const fetchGeographicData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -76,12 +72,15 @@ export default function GeographicHeatMap({
       const result = await response.json()
       setData(result)
     } catch (err) {
-      console.error('Geographic data fetch error:', err)
       setError('Failed to load geographic data')
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeRange, category])
+
+  useEffect(() => {
+    fetchGeographicData()
+  }, [fetchGeographicData])
 
   // Create color scale for markers
   const getColorScale = () => {

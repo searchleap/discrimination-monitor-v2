@@ -473,7 +473,7 @@ export default function EnhancedAnalyticsDashboard() {
                       </div>
                       <div>
                         <span className="font-medium">P-value:</span>
-                        <span className="ml-2 text-green-600">< 0.001 (Significant)</span>
+                        <span className="ml-2 text-green-600">&lt; 0.001 (Significant)</span>
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
