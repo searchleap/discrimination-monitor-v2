@@ -3,9 +3,37 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ExternalLink, Clock, MapPin, AlertTriangle } from 'lucide-react'
+import { ExternalLink, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react'
 
-// Mock data - will be replaced with real data from API
+// Article interface matching the API response
+interface Article {
+  id: string
+  title: string
+  content: string
+  summary?: string
+  url: string
+  publishedAt: string
+  source: string
+  feedId: string
+  location: 'MICHIGAN' | 'NATIONAL' | 'INTERNATIONAL'
+  discriminationType: 'RACIAL' | 'RELIGIOUS' | 'DISABILITY' | 'GENERAL_AI' | 'MULTIPLE'
+  severity: 'LOW' | 'MEDIUM' | 'HIGH'
+  organizations: string[]
+  keywords: string[]
+  entities: any
+  processed: boolean
+  processingError?: string | null
+  confidenceScore?: number | null
+  aiClassification?: any
+  createdAt: string
+  updatedAt: string
+  feed: {
+    name: string
+    category: string
+  }
+}
+
+// Keep mock data as fallback for development
 const mockArticles = [
   {
     id: '1',
@@ -204,7 +232,7 @@ const mockArticles = [
   },
 ]
 
-function ArticleCard({ article }: { article: typeof mockArticles[0] }) {
+function ArticleCard({ article }: { article: Article | typeof mockArticles[0] }) {
   return (
     <Card className="card-hover">
       <CardHeader>
@@ -232,7 +260,7 @@ function ArticleCard({ article }: { article: typeof mockArticles[0] }) {
       </CardHeader>
       <CardContent>
         <p className="text-gray-600 mb-4 line-clamp-3">
-          {article.summary}
+          {article.summary || (article.content ? article.content.substring(0, 200) + '...' : 'No summary available')}
         </p>
         
         <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
@@ -240,7 +268,9 @@ function ArticleCard({ article }: { article: typeof mockArticles[0] }) {
             <Clock className="h-4 w-4" />
             <span>{new Date(article.publishedAt).toLocaleDateString()}</span>
           </div>
-          <span className="font-medium">{article.source}</span>
+          <span className="font-medium">
+            {'feed' in article ? article.feed.name : article.source}
+          </span>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
@@ -278,18 +308,57 @@ function ArticleCard({ article }: { article: typeof mockArticles[0] }) {
 
 export function ArticleGrid() {
   const articlesPerPage = 6
-  const [filteredArticles, setFilteredArticles] = useState(mockArticles)
-  const [displayedArticles, setDisplayedArticles] = useState(mockArticles.slice(0, articlesPerPage))
+  const [articles, setArticles] = useState<Article[]>([])
+  const [filteredArticles, setFilteredArticles] = useState<Article[]>([])
+  const [displayedArticles, setDisplayedArticles] = useState<Article[]>([])
   const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  // Fetch articles from API
+  useEffect(() => {
+    async function fetchArticles() {
+      try {
+        setIsLoading(true)
+        setError(null)
+        
+        const response = await fetch('/api/articles?limit=50&sortBy=publishedAt&sortOrder=desc')
+        const data = await response.json()
+        
+        if (data.success) {
+          const fetchedArticles = data.data as Article[]
+          setArticles(fetchedArticles)
+          setFilteredArticles(fetchedArticles)
+          setDisplayedArticles(fetchedArticles.slice(0, articlesPerPage))
+        } else {
+          console.warn('Failed to fetch articles, using mock data')
+          // Fallback to mock data
+          setArticles(mockArticles as any)
+          setFilteredArticles(mockArticles as any)
+          setDisplayedArticles(mockArticles.slice(0, articlesPerPage) as any)
+        }
+      } catch (error) {
+        console.error('Error fetching articles:', error)
+        setError('Failed to load articles')
+        // Fallback to mock data  
+        setArticles(mockArticles as any)
+        setFilteredArticles(mockArticles as any)
+        setDisplayedArticles(mockArticles.slice(0, articlesPerPage) as any)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    fetchArticles()
+  }, [])
+
   useEffect(() => {
     const handleFilterEvent = (event: CustomEvent) => {
       const { filter, label } = event.detail
       setActiveFilter(label)
       
       // Filter articles based on the applied filter
-      const filtered = mockArticles.filter(article => {
+      const filtered = articles.filter(article => {
         if (filter.location) {
           return article.location === filter.location
         }
@@ -306,7 +375,7 @@ export function ArticleGrid() {
     
     window.addEventListener('applyFilter', handleFilterEvent as EventListener)
     return () => window.removeEventListener('applyFilter', handleFilterEvent as EventListener)
-  }, [])
+  }, [articles])
   
   const loadMoreArticles = () => {
     const nextPage = currentPage + 1
@@ -320,6 +389,39 @@ export function ArticleGrid() {
   
   const hasMoreArticles = displayedArticles.length < filteredArticles.length
   
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-4" id="articles-section">
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center space-x-2 text-gray-500">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span>Loading articles...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-4" id="articles-section">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-red-600 mb-2">Error: {error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="text-primary hover:text-primary/80 underline"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4" id="articles-section">
       <div className="flex items-center justify-between">
@@ -364,8 +466,8 @@ export function ArticleGrid() {
           <button
             onClick={() => {
               setActiveFilter(null)
-              setFilteredArticles(mockArticles)
-              setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
+              setFilteredArticles(articles)
+              setDisplayedArticles(articles.slice(0, articlesPerPage))
               setCurrentPage(1)
               window.history.pushState({}, '', window.location.pathname)
             }}
