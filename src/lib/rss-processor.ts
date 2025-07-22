@@ -1,362 +1,354 @@
-import { Feed, Article, ProcessingLog } from '@/types'
-import { sanitizeHtml, extractDomain } from '@/lib/utils'
+import Parser from 'rss-parser'
+import { PrismaClient } from '@prisma/client'
+import { createHash } from 'crypto'
 
-export interface RSSFeed {
-  title: string
-  link: string
-  description: string
-  language?: string
-  lastBuildDate?: string
-  items: RSSItem[]
-}
+const parser = new Parser({
+  customFields: {
+    item: [
+      ['description', 'description'],
+      ['content:encoded', 'contentEncoded'],
+      ['dc:creator', 'creator'],
+      ['category', 'categories']
+    ]
+  }
+})
 
-export interface RSSItem {
-  title: string
-  link: string
-  description: string
-  pubDate: string
-  author?: string
-  category?: string[]
-  guid?: string
+const prisma = new PrismaClient()
+
+interface RSSItem {
+  title?: string
+  link?: string
+  pubDate?: string
   content?: string
+  description?: string
+  contentEncoded?: string
+  creator?: string
+  categories?: string[]
 }
 
-export interface FeedProcessingResult {
-  feed: Feed
-  articles: Article[]
+interface ProcessingResult {
+  success: boolean
+  articlesProcessed: number
+  newArticles: number
+  duplicates: number
   errors: string[]
-  processingTime: number
-  duplicatesFound: number
 }
 
 export class RSSProcessor {
-  private static readonly USER_AGENT = 'AI-Discrimination-Monitor/2.0'
-  private static readonly TIMEOUT = 30000 // 30 seconds
-  private static readonly MAX_RETRIES = 3
+  private batchSize: number = parseInt(process.env.RSS_BATCH_SIZE || '10')
+  
+  constructor() {
+    console.log(`RSS Processor initialized with batch size: ${this.batchSize}`)
+  }
 
   /**
    * Process a single RSS feed
    */
-  async processFeed(feed: Feed): Promise<FeedProcessingResult> {
+  async processFeed(feedId: string): Promise<ProcessingResult> {
     const startTime = Date.now()
-    const result: FeedProcessingResult = {
-      feed,
-      articles: [],
-      errors: [],
-      processingTime: 0,
-      duplicatesFound: 0
+    const result: ProcessingResult = {
+      success: false,
+      articlesProcessed: 0,
+      newArticles: 0,
+      duplicates: 0,
+      errors: []
     }
 
     try {
-      // Fetch RSS feed with retry logic
-      const rssData = await this.fetchRSSWithRetry(feed.url)
-      
-      if (!rssData) {
-        result.errors.push('Failed to fetch RSS feed after retries')
+      // Get feed from database
+      const feed = await prisma.feed.findUnique({
+        where: { id: feedId }
+      })
+
+      if (!feed || !feed.isActive) {
+        result.errors.push(`Feed ${feedId} not found or inactive`)
         return result
       }
 
-      // Parse RSS items into articles
-      const articles = await this.parseRSSItems(rssData.items, feed)
-      result.articles = articles
+      console.log(`Processing feed: ${feed.name} (${feed.url})`)
+
+      // Parse RSS feed
+      const feedData = await parser.parseURL(feed.url)
+      
+      if (!feedData.items || feedData.items.length === 0) {
+        result.errors.push(`No items found in feed: ${feed.name}`)
+        return result
+      }
+
+      // Process each article
+      for (const item of feedData.items) {
+        try {
+          const processedArticle = await this.processArticle(item as RSSItem, feed.id, feed.name)
+          if (processedArticle) {
+            if (processedArticle.isNew) {
+              result.newArticles++
+            } else {
+              result.duplicates++
+            }
+            result.articlesProcessed++
+          }
+        } catch (error) {
+          result.errors.push(`Error processing article: ${error}`)
+        }
+      }
 
       // Update feed metadata
-      result.feed = {
-        ...feed,
-        lastFetched: new Date(),
-        status: 'ACTIVE',
-        errorMessage: null,
-        successRate: this.calculateSuccessRate(feed, true)
-      }
+      await prisma.feed.update({
+        where: { id: feedId },
+        data: {
+          lastFetched: new Date(),
+          status: 'ACTIVE',
+          errorMessage: null,
+          successRate: result.errors.length === 0 ? 1.0 : Math.max(0, 1.0 - (result.errors.length / feedData.items.length))
+        }
+      })
+
+      // Log processing result
+      const processingTime = Date.now() - startTime
+      await this.logProcessing('RSS_FETCH', 'SUCCESS', 
+        `Processed ${result.articlesProcessed} articles, ${result.newArticles} new`,
+        { feedId, processingTime, ...result }
+      )
+
+      result.success = result.errors.length === 0
+      console.log(`✅ Feed processed: ${feed.name} - ${result.newArticles} new articles`)
+      return result
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       result.errors.push(errorMessage)
       
-      result.feed = {
-        ...feed,
-        lastFetched: new Date(),
-        status: 'ERROR',
-        errorMessage,
-        successRate: this.calculateSuccessRate(feed, false)
-      }
-    }
+      // Update feed with error status
+      await prisma.feed.update({
+        where: { id: feedId },
+        data: {
+          status: 'ERROR',
+          errorMessage: errorMessage,
+          successRate: Math.max(0, (await this.getFeedSuccessRate(feedId)) - 0.1)
+        }
+      }).catch(console.error)
 
-    result.processingTime = Date.now() - startTime
-    return result
+      // Log error
+      await this.logProcessing('RSS_FETCH', 'ERROR', errorMessage, { feedId })
+      
+      console.error(`❌ Error processing feed ${feedId}:`, error)
+      return result
+    }
   }
 
   /**
-   * Fetch RSS feed with retry logic and proxy support
+   * Process all active feeds
    */
-  private async fetchRSSWithRetry(url: string): Promise<RSSFeed | null> {
-    let lastError: Error | null = null
+  async processAllFeeds(): Promise<{ [feedId: string]: ProcessingResult }> {
+    console.log('🔄 Starting RSS processing for all active feeds...')
+    
+    try {
+      const activeFeeds = await prisma.feed.findMany({
+        where: { 
+          isActive: true,
+          status: { not: 'MAINTENANCE' }
+        },
+        orderBy: { priority: 'asc' }
+      })
 
-    for (let attempt = 1; attempt <= RSSProcessor.MAX_RETRIES; attempt++) {
-      try {
-        return await this.fetchRSS(url)
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error')
+      console.log(`Found ${activeFeeds.length} active feeds to process`)
+      
+      const results: { [feedId: string]: ProcessingResult } = {}
+      
+      // Process feeds in batches to avoid overwhelming external services
+      for (let i = 0; i < activeFeeds.length; i += this.batchSize) {
+        const batch = activeFeeds.slice(i, i + this.batchSize)
+        console.log(`Processing batch ${Math.floor(i / this.batchSize) + 1}/${Math.ceil(activeFeeds.length / this.batchSize)}`)
         
-        if (attempt < RSSProcessor.MAX_RETRIES) {
-          // Exponential backoff: 1s, 2s, 4s
-          await this.sleep(Math.pow(2, attempt - 1) * 1000)
+        const batchPromises = batch.map(feed => 
+          this.processFeed(feed.id).then(result => ({ feedId: feed.id, result }))
+        )
+        
+        const batchResults = await Promise.allSettled(batchPromises)
+        
+        batchResults.forEach((promise, index) => {
+          if (promise.status === 'fulfilled') {
+            results[promise.value.feedId] = promise.value.result
+          } else {
+            const feedId = batch[index].id
+            results[feedId] = {
+              success: false,
+              articlesProcessed: 0,
+              newArticles: 0,
+              duplicates: 0,
+              errors: [`Batch processing failed: ${promise.reason}`]
+            }
+          }
+        })
+        
+        // Add delay between batches to be respectful to external services
+        if (i + this.batchSize < activeFeeds.length) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
         }
       }
-    }
 
-    throw lastError
-  }
-
-  /**
-   * Fetch RSS feed with proxy support
-   */
-  private async fetchRSS(url: string): Promise<RSSFeed> {
-    const proxyUrl = `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(url)}`
-    
-    const response = await fetch(proxyUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': RSSProcessor.USER_AGENT,
-        'Accept': 'application/rss+xml, application/xml, text/xml'
-      },
-      signal: AbortSignal.timeout(RSSProcessor.TIMEOUT)
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const xmlText = await response.text()
-    return this.parseRSSXML(xmlText)
-  }
-
-  /**
-   * Parse RSS XML into structured data
-   */
-  private parseRSSXML(xmlText: string): RSSFeed {
-    // Simple XML parsing - in production, use a proper XML parser like 'fast-xml-parser'
-    const titleMatch = xmlText.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/)
-    const linkMatch = xmlText.match(/<link>(.*?)<\/link>/)
-    const descMatch = xmlText.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>(.*?)<\/description>/)
-    
-    // Extract items
-    const itemsRegex = /<item>(.*?)<\/item>/g
-    const items: RSSItem[] = []
-    let itemMatch
-
-    while ((itemMatch = itemsRegex.exec(xmlText)) !== null) {
-      const itemXml = itemMatch[1]
-      const item = this.parseRSSItem(itemXml)
-      if (item) {
-        items.push(item)
-      }
-    }
-
-    return {
-      title: titleMatch?.[1] || titleMatch?.[2] || 'Unknown Feed',
-      link: linkMatch?.[1] || '',
-      description: descMatch?.[1] || descMatch?.[2] || '',
-      items
+      // Calculate overall statistics
+      const totalProcessed = Object.values(results).reduce((sum, r) => sum + r.articlesProcessed, 0)
+      const totalNew = Object.values(results).reduce((sum, r) => sum + r.newArticles, 0)
+      const totalErrors = Object.values(results).reduce((sum, r) => sum + r.errors.length, 0)
+      
+      console.log(`🎉 RSS processing completed: ${totalNew} new articles from ${totalProcessed} total processed`)
+      console.log(`📊 Error summary: ${totalErrors} errors across ${activeFeeds.length} feeds`)
+      
+      return results
+      
+    } catch (error) {
+      console.error('❌ Fatal error in RSS processing:', error)
+      throw error
     }
   }
 
   /**
-   * Parse individual RSS item
+   * Process a single article from RSS feed
    */
-  private parseRSSItem(itemXml: string): RSSItem | null {
-    const titleMatch = itemXml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>|<title>(.*?)<\/title>/)
-    const linkMatch = itemXml.match(/<link>(.*?)<\/link>/)
-    const descMatch = itemXml.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>|<description>(.*?)<\/description>/)
-    const pubDateMatch = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)
-    const authorMatch = itemXml.match(/<author>(.*?)<\/author>/)
-    const guidMatch = itemXml.match(/<guid.*?>(.*?)<\/guid>/)
-
-    if (!titleMatch || !linkMatch) {
-      return null
-    }
-
-    return {
-      title: this.cleanText(titleMatch[1] || titleMatch[2] || ''),
-      link: linkMatch[1] || '',
-      description: this.cleanText(descMatch?.[1] || descMatch?.[2] || ''),
-      pubDate: pubDateMatch?.[1] || new Date().toISOString(),
-      author: authorMatch?.[1],
-      guid: guidMatch?.[1]
-    }
-  }
-
-  /**
-   * Convert RSS items to Article objects
-   */
-  private async parseRSSItems(items: RSSItem[], feed: Feed): Promise<Article[]> {
-    const articles: Article[] = []
-    
-    for (const item of items) {
-      try {
-        const article = await this.convertRSSItemToArticle(item, feed)
-        if (article) {
-          articles.push(article)
-        }
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Error converting RSS item to article:', error)
-      }
-    }
-
-    return articles
-  }
-
-  /**
-   * Convert RSS item to Article object
-   */
-  private async convertRSSItemToArticle(item: RSSItem, feed: Feed): Promise<Article | null> {
+  private async processArticle(item: RSSItem, feedId: string, sourceName: string): Promise<{ isNew: boolean } | null> {
     if (!item.title || !item.link) {
       return null
     }
 
-    const publishedAt = this.parseDate(item.pubDate)
-    const content = sanitizeHtml(item.description)
-    const summary = this.generateSummary(content)
+    // Create article hash for duplicate detection
+    const articleHash = this.createArticleHash(item.title, item.link)
+    
+    // Check if article already exists
+    const existingArticle = await prisma.article.findUnique({
+      where: { url: item.link }
+    })
 
-    return {
-      id: this.generateArticleId(item.link),
-      title: item.title,
-      content,
-      summary,
-      url: item.link,
-      publishedAt,
-      source: extractDomain(item.link),
-      feedId: feed.id,
-      
-      // Default values - will be updated by AI classification
-      location: 'NATIONAL',
-      discriminationType: 'GENERAL_AI',
-      severity: 'LOW',
-      
-      organizations: [],
-      keywords: [],
-      entities: null,
-      
-      processed: false,
-      processingError: null,
-      confidenceScore: null,
-      aiClassification: null,
-      
-      createdAt: new Date(),
-      updatedAt: new Date()
+    if (existingArticle) {
+      return { isNew: false }
+    }
+
+    // Extract content - prefer contentEncoded over description
+    const content = item.contentEncoded || item.content || item.description || ''
+    const cleanContent = this.cleanContent(content)
+    
+    // Parse publication date
+    const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
+    
+    // Generate summary (first 200 chars of cleaned content)
+    const summary = cleanContent.length > 200 
+      ? cleanContent.substring(0, 200) + '...'
+      : cleanContent
+
+    // Extract basic keywords (simple implementation - can be enhanced)
+    const keywords = this.extractKeywords(item.title + ' ' + cleanContent)
+
+    try {
+      await prisma.article.create({
+        data: {
+          title: item.title,
+          content: cleanContent,
+          summary,
+          url: item.link,
+          publishedAt,
+          source: sourceName,
+          feedId,
+          
+          // Default classifications - will be updated by AI processing
+          location: 'NATIONAL', // Default, will be classified by AI
+          discriminationType: 'GENERAL_AI', // Default, will be classified by AI  
+          severity: 'MEDIUM', // Default, will be classified by AI
+          
+          keywords,
+          organizations: [], // Will be extracted by AI
+          entities: {},
+          
+          processed: false, // Will be processed by AI classification
+          confidenceScore: 0.0
+        }
+      })
+
+      return { isNew: true }
+    } catch (error) {
+      // Handle duplicate key constraint or other DB errors
+      if (error instanceof Error && error.message.includes('Unique constraint')) {
+        return { isNew: false }
+      }
+      throw error
     }
   }
 
   /**
-   * Generate summary from content
+   * Clean HTML and extract plain text
    */
-  private generateSummary(content: string, maxLength: number = 300): string {
-    if (content.length <= maxLength) {
-      return content
-    }
-    
-    const truncated = content.substring(0, maxLength)
-    const lastSpaceIndex = truncated.lastIndexOf(' ')
-    
-    if (lastSpaceIndex > maxLength * 0.8) {
-      return truncated.substring(0, lastSpaceIndex) + '...'
-    }
-    
-    return truncated + '...'
-  }
-
-  /**
-   * Generate unique article ID from URL
-   */
-  private generateArticleId(url: string): string {
-    return Buffer.from(url).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 25)
-  }
-
-  /**
-   * Parse date string to Date object
-   */
-  private parseDate(dateString: string): Date {
-    const date = new Date(dateString)
-    return isNaN(date.getTime()) ? new Date() : date
-  }
-
-  /**
-   * Clean text content
-   */
-  private cleanText(text: string): string {
-    return sanitizeHtml(text)
-      .replace(/\s+/g, ' ')
+  private cleanContent(content: string): string {
+    return content
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/&[a-zA-Z0-9#]+;/g, ' ') // Remove HTML entities
+      .replace(/\s+/g, ' ') // Normalize whitespace
       .trim()
   }
 
   /**
-   * Calculate success rate for feed
+   * Extract basic keywords from text
    */
-  private calculateSuccessRate(feed: Feed, currentSuccess: boolean): number {
-    // Simple success rate calculation - in production, use historical data
-    const currentRate = feed.successRate || 1.0
-    const weight = 0.1 // Weight for new result
-    
-    return currentSuccess 
-      ? Math.min(1.0, currentRate + weight * (1.0 - currentRate))
-      : Math.max(0.0, currentRate - weight * currentRate)
+  private extractKeywords(text: string): string[] {
+    const stopWords = new Set([
+      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'cannot', 'this', 'that', 'these', 'those', 'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves'
+    ])
+
+    const words = text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 3 && !stopWords.has(word))
+
+    // Count word frequencies
+    const wordCount = new Map<string, number>()
+    words.forEach(word => {
+      wordCount.set(word, (wordCount.get(word) || 0) + 1)
+    })
+
+    // Return top 10 most frequent words
+    return Array.from(wordCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([word]) => word)
   }
 
   /**
-   * Sleep utility for retry delays
+   * Create hash for duplicate detection
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+  private createArticleHash(title: string, url: string): string {
+    return createHash('md5').update(title + url).digest('hex')
   }
-}
 
-/**
- * Batch process multiple feeds
- */
-export async function processFeedsBatch(feeds: Feed[]): Promise<FeedProcessingResult[]> {
-  const processor = new RSSProcessor()
-  const results: FeedProcessingResult[] = []
-  
-  // Process feeds in batches to avoid overwhelming the system
-  const batchSize = 5
-  
-  for (let i = 0; i < feeds.length; i += batchSize) {
-    const batch = feeds.slice(i, i + batchSize)
-    const batchResults = await Promise.all(
-      batch.map(feed => processor.processFeed(feed))
-    )
-    results.push(...batchResults)
-    
-    // Small delay between batches
-    if (i + batchSize < feeds.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000))
+  /**
+   * Get feed success rate
+   */
+  private async getFeedSuccessRate(feedId: string): Promise<number> {
+    const feed = await prisma.feed.findUnique({
+      where: { id: feedId },
+      select: { successRate: true }
+    })
+    return feed?.successRate || 0.0
+  }
+
+  /**
+   * Log processing events
+   */
+  private async logProcessing(type: string, status: string, message: string, details?: any): Promise<void> {
+    try {
+      await prisma.processingLog.create({
+        data: {
+          type,
+          status,
+          message,
+          details: details || {},
+          processingTime: details?.processingTime || null,
+          feedId: details?.feedId || null,
+          articleId: details?.articleId || null
+        }
+      })
+    } catch (error) {
+      console.error('Failed to log processing event:', error)
     }
   }
-  
-  return results
 }
 
-/**
- * Create processing log entry
- */
-export function createProcessingLog(
-  type: string,
-  status: string,
-  message?: string,
-  details?: any,
-  feedId?: string,
-  articleId?: string
-): ProcessingLog {
-  return {
-    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    type,
-    status,
-    message,
-    details,
-    processingTime: null,
-    feedId,
-    articleId,
-    createdAt: new Date()
-  }
-}
+export const rssProcessor = new RSSProcessor()

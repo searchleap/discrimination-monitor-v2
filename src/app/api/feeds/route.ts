@@ -1,57 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Feed } from '@/types'
-
-// Mock feed data - will be replaced with database queries
-const mockFeeds: Feed[] = [
-  {
-    id: 'feed-1',
-    name: 'Michigan Civil Rights News',
-    url: 'https://example.com/michigan-civil-rights.rss',
-    category: 'CIVIL_RIGHTS',
-    isActive: true,
-    lastFetched: new Date('2025-01-09T06:00:00Z'),
-    status: 'ACTIVE',
-    errorMessage: null,
-    successRate: 0.95,
-    customHeaders: null,
-    processingRules: null,
-    priority: 1,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-09T06:00:00Z'),
-  },
-  {
-    id: 'feed-2',
-    name: 'AI Ethics Daily',
-    url: 'https://example.com/ai-ethics.rss',
-    category: 'DATA_ETHICS',
-    isActive: true,
-    lastFetched: new Date('2025-01-09T06:00:00Z'),
-    status: 'ACTIVE',
-    errorMessage: null,
-    successRate: 0.88,
-    customHeaders: null,
-    processingRules: null,
-    priority: 2,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-09T06:00:00Z'),
-  },
-  {
-    id: 'feed-3',
-    name: 'Tech Discrimination Watch',
-    url: 'https://example.com/tech-discrimination.rss',
-    category: 'TECH_NEWS',
-    isActive: true,
-    lastFetched: new Date('2025-01-09T06:00:00Z'),
-    status: 'ERROR',
-    errorMessage: 'Connection timeout',
-    successRate: 0.65,
-    customHeaders: null,
-    processingRules: null,
-    priority: 3,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-09T06:00:00Z'),
-  },
-]
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,33 +9,49 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // Filter feeds based on query parameters
-    let filteredFeeds = mockFeeds
+    // Build where clause for filtering
+    const where: any = {}
 
     if (category) {
-      filteredFeeds = filteredFeeds.filter(feed => feed.category === category)
+      where.category = category
     }
 
     if (status) {
-      filteredFeeds = filteredFeeds.filter(feed => feed.status === status)
+      where.status = status
     }
 
-    // Paginate results
-    const paginatedFeeds = filteredFeeds.slice(offset, offset + limit)
+    // Get feeds from database
+    const feeds = await prisma.feed.findMany({
+      where,
+      orderBy: [
+        { priority: 'asc' },
+        { name: 'asc' }
+      ],
+      skip: offset,
+      take: limit,
+      include: {
+        _count: {
+          select: {
+            articles: true
+          }
+        }
+      }
+    })
+
+    // Get total count for pagination
+    const total = await prisma.feed.count({ where })
 
     return NextResponse.json({
       success: true,
-      data: paginatedFeeds,
+      data: feeds,
       pagination: {
-        total: filteredFeeds.length,
+        total,
         limit,
         offset,
-        hasMore: offset + limit < filteredFeeds.length
+        hasMore: offset + limit < total
       }
     })
   } catch (error) {
-    // eslint-disable-next-line no-console
-    // eslint-disable-next-line no-console
     console.error('Error fetching feeds:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch feeds' },
@@ -108,26 +72,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create new feed
-    const newFeed: Feed = {
-      id: `feed-${Date.now()}`,
-      name: body.name,
-      url: body.url,
-      category: body.category,
-      isActive: body.isActive ?? true,
-      lastFetched: null,
-      status: 'ACTIVE',
-      errorMessage: null,
-      successRate: 1.0,
-      customHeaders: body.customHeaders || null,
-      processingRules: body.processingRules || null,
-      priority: body.priority || 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    // Check if feed with this URL already exists
+    const existingFeed = await prisma.feed.findUnique({
+      where: { url: body.url }
+    })
+
+    if (existingFeed) {
+      return NextResponse.json(
+        { success: false, error: 'Feed with this URL already exists' },
+        { status: 409 }
+      )
     }
 
-    // In production, save to database
-    // await db.feed.create({ data: newFeed })
+    // Create new feed in database
+    const newFeed = await prisma.feed.create({
+      data: {
+        name: body.name,
+        url: body.url,
+        category: body.category,
+        isActive: body.isActive ?? true,
+        status: 'ACTIVE',
+        successRate: 1.0,
+        priority: body.priority || 1,
+        customHeaders: body.customHeaders || null,
+        processingRules: body.processingRules || null
+      },
+      include: {
+        _count: {
+          select: {
+            articles: true
+          }
+        }
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -135,8 +112,6 @@ export async function POST(request: NextRequest) {
       message: 'Feed created successfully'
     })
   } catch (error) {
-    // eslint-disable-next-line no-console
-    // eslint-disable-next-line no-console
     console.error('Error creating feed:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to create feed' },
