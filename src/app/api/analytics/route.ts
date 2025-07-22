@@ -11,6 +11,9 @@ export async function GET(request: Request) {
     const startDate = new Date(endDate)
     startDate.setDate(startDate.getDate() - days)
     
+    // For debugging: log the date range being queried
+    console.log(`Analytics query: ${startDate.toISOString()} to ${endDate.toISOString()}`)
+    
     // Get total articles in date range
     const totalArticles = await prisma.article.count({
       where: {
@@ -54,6 +57,7 @@ export async function GET(request: Request) {
           classificationType.discrimination += count
           break
         case 'GENERAL_AI':
+          // For now, treat GENERAL_AI as potential bias cases needing further classification
           classificationType.bias += count
           break
         default:
