@@ -270,34 +270,29 @@ export class RSSProcessor {
         }
       })
 
-      // Attempt AI classification if enabled
+      // Queue AI classification if enabled (non-blocking)
       if (this.enableAIClassification) {
-        try {
-          await this.classifyArticle(newArticle.id, {
-            id: newArticle.id,
-            title: item.title,
-            content: cleanContent,
-            url: item.link,
-            source: sourceName,
-            publishedAt,
-            feedId,
-            location: 'NATIONAL',
-            discriminationType: 'GENERAL_AI',
-            severity: 'MEDIUM',
-            organizations: [],
-            keywords,
-            processed: false,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          })
-        } catch (aiError) {
-          // Log AI classification error but don't fail the article creation
-          console.warn(`⚠️  AI classification failed for article ${newArticle.id}:`, aiError instanceof Error ? aiError.message : aiError)
-          await this.logProcessing('AI_CLASSIFICATION', 'ERROR', 
-            `AI classification failed: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`,
-            { articleId: newArticle.id, feedId }
-          )
-        }
+        // Don't await - let this happen in background
+        this.queueAIClassification(newArticle.id, {
+          id: newArticle.id,
+          title: item.title,
+          content: cleanContent,
+          url: item.link,
+          source: sourceName,
+          publishedAt,
+          feedId,
+          location: 'NATIONAL',
+          discriminationType: 'GENERAL_AI',
+          severity: 'MEDIUM',
+          organizations: [],
+          keywords,
+          processed: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }).catch(error => {
+          // Log but don't throw - this runs async
+          console.warn(`⚠️  Background AI classification queuing failed for article ${newArticle.id}:`, error instanceof Error ? error.message : error)
+        })
       }
 
       return { isNew: true }
@@ -367,7 +362,26 @@ export class RSSProcessor {
   }
 
   /**
-   * Classify an article using AI
+   * Queue AI classification to run in background (non-blocking)
+   */
+  private async queueAIClassification(articleId: string, articleData: any): Promise<void> {
+    // Use setTimeout to ensure this runs after the current event loop
+    setTimeout(async () => {
+      try {
+        await this.classifyArticle(articleId, articleData)
+      } catch (error) {
+        // Log AI classification error but don't propagate
+        console.warn(`⚠️  Background AI classification failed for article ${articleId}:`, error instanceof Error ? error.message : error)
+        await this.logProcessing('AI_CLASSIFICATION', 'ERROR', 
+          `Background AI classification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          { articleId, feedId: articleData.feedId }
+        ).catch(() => {}) // Ignore logging errors
+      }
+    }, 100) // Small delay to ensure RSS processing completes first
+  }
+
+  /**
+   * Classify an article using AI (synchronous for admin interface)
    */
   private async classifyArticle(articleId: string, articleData: any): Promise<void> {
     const startTime = Date.now()

@@ -3,18 +3,26 @@ import { rssProcessor } from '@/lib/rss-processor'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  const timeoutMs = 45000 // 45 second timeout (leave 15s buffer from Vercel's 60s limit)
+  
   try {
     console.log('🚀 Starting manual RSS processing...')
     
     const body = await request.json().catch(() => ({}))
     const feedIds = body.feedIds || null
-    const maxFeeds = body.maxFeeds || 5 // Limit for manual processing
+    const maxFeeds = body.maxFeeds || 3 // Conservative limit to prevent timeouts
     
     const results: any = {}
     
     if (feedIds && Array.isArray(feedIds)) {
       // Process specific feeds
       for (const feedId of feedIds.slice(0, maxFeeds)) {
+        // Check timeout before processing each feed
+        if (Date.now() - startTime > timeoutMs) {
+          console.warn(`⏰ Processing timeout reached, stopping after ${Object.keys(results).length} feeds`)
+          break
+        }
         results[feedId] = await rssProcessor.processFeed(feedId)
       }
     } else {
@@ -29,6 +37,11 @@ export async function POST(request: NextRequest) {
       })
       
       for (const feed of activeFeeds) {
+        // Check timeout before processing each feed
+        if (Date.now() - startTime > timeoutMs) {
+          console.warn(`⏰ Processing timeout reached, stopping after ${Object.keys(results).length} feeds`)
+          break
+        }
         results[feed.id] = await rssProcessor.processFeed(feed.id)
       }
     }
