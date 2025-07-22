@@ -183,9 +183,9 @@ export async function POST(request: NextRequest) {
         message: `AI service test completed using ${provider}`,
         details: {
           provider,
-          testResult: result,
+          testResult: JSON.parse(JSON.stringify(result)), // Convert to plain object
           processingTime
-        },
+        } as any, // Cast to satisfy Prisma JSON type requirements
         processingTime
       }
     })
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
           message: `AI service test failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
           details: {
             error: error instanceof Error ? error.stack : String(error)
-          }
+          } as any // Cast to satisfy Prisma JSON type requirements
         }
       })
     } catch (logError) {

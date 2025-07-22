@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
               message: `Batch classified: ${classification.discriminationType}/${classification.severity}`,
               details: {
                 articleId: article.id,
-                classification,
+                classification: JSON.parse(JSON.stringify(classification)), // Convert to plain object
                 confidenceScore: classification.confidenceScore
               },
               articleId: article.id
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
               details: {
                 articleId: article.id,
                 error: error instanceof Error ? error.stack : String(error)
-              },
+              } as any, // Cast to satisfy Prisma JSON type requirements
               articleId: article.id
             }
           })
