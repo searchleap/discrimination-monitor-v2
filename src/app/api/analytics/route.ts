@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       }
     })
 
-    // Calculate fairness articles (those with keywords but not classified as discrimination)
+    // Calculate fairness articles (those with fairness-related keywords)
     const fairnessKeywordCount = await prisma.article.count({
       where: {
         publishedAt: {
@@ -73,10 +73,7 @@ export async function GET(request: Request) {
           { title: { contains: 'equality', mode: 'insensitive' } },
           { title: { contains: 'inclusive', mode: 'insensitive' } },
           { content: { contains: 'fairness', mode: 'insensitive' } }
-        ],
-        discriminationType: {
-          notIn: ['RACIAL', 'RELIGIOUS', 'DISABILITY', 'MULTIPLE']
-        }
+        ]
       }
     })
     
@@ -150,11 +147,6 @@ export async function GET(request: Request) {
         publishedAt: {
           gte: startDate,
           lte: endDate
-        },
-        keywords: {
-          not: {
-            equals: []
-          }
         }
       },
       select: {
