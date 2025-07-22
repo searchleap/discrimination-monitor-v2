@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
         severity: true,
         organizations: true,
         keywords: true,
-        processed: true
+        processed: true,
+        createdAt: true,
+        updatedAt: true
       }
     })
     
