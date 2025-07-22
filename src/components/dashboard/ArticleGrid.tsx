@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { ExternalLink, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react'
 
 // Article interface matching the API response
-interface Article {
+interface APIArticle {
   id: string
   title: string
   content: string
@@ -232,7 +232,10 @@ const mockArticles = [
   },
 ]
 
-function ArticleCard({ article }: { article: Article | typeof mockArticles[0] }) {
+// Type for both API and mock articles
+type Article = APIArticle | typeof mockArticles[0]
+
+function ArticleCard({ article }: { article: Article }) {
   return (
     <Card className="card-hover">
       <CardHeader>
@@ -260,7 +263,7 @@ function ArticleCard({ article }: { article: Article | typeof mockArticles[0] })
       </CardHeader>
       <CardContent>
         <p className="text-gray-600 mb-4 line-clamp-3">
-          {article.summary || (article.content ? article.content.substring(0, 200) + '...' : 'No summary available')}
+          {article.summary || ('content' in article && article.content ? article.content.substring(0, 200) + '...' : 'No summary available')}
         </p>
         
         <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
@@ -326,24 +329,24 @@ export function ArticleGrid() {
         const data = await response.json()
         
         if (data.success) {
-          const fetchedArticles = data.data as Article[]
+          const fetchedArticles = data.data as APIArticle[]
           setArticles(fetchedArticles)
           setFilteredArticles(fetchedArticles)
           setDisplayedArticles(fetchedArticles.slice(0, articlesPerPage))
         } else {
           console.warn('Failed to fetch articles, using mock data')
           // Fallback to mock data
-          setArticles(mockArticles as any)
-          setFilteredArticles(mockArticles as any)
-          setDisplayedArticles(mockArticles.slice(0, articlesPerPage) as any)
+          setArticles(mockArticles)
+          setFilteredArticles(mockArticles)
+          setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
         }
       } catch (error) {
         console.error('Error fetching articles:', error)
         setError('Failed to load articles')
         // Fallback to mock data  
-        setArticles(mockArticles as any)
-        setFilteredArticles(mockArticles as any)
-        setDisplayedArticles(mockArticles.slice(0, articlesPerPage) as any)
+        setArticles(mockArticles)
+        setFilteredArticles(mockArticles)
+        setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
       } finally {
         setIsLoading(false)
       }
