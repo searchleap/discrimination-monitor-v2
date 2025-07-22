@@ -1,6 +1,7 @@
 import Parser from 'rss-parser'
 import { PrismaClient } from '@prisma/client'
 import { createHash } from 'crypto'
+import { AIClassifier } from './ai-classifier'
 
 const parser = new Parser({
   customFields: {
@@ -36,9 +37,14 @@ interface ProcessingResult {
 
 export class RSSProcessor {
   private batchSize: number = parseInt(process.env.RSS_BATCH_SIZE || '10')
+  private aiClassifier: AIClassifier
+  private enableAIClassification: boolean
   
   constructor() {
     console.log(`RSS Processor initialized with batch size: ${this.batchSize}`)
+    this.aiClassifier = new AIClassifier()
+    this.enableAIClassification = process.env.ENABLE_AI_CLASSIFICATION !== 'false'
+    console.log(`AI Classification: ${this.enableAIClassification ? 'enabled' : 'disabled'}`)
   }
 
   /**
@@ -239,7 +245,8 @@ export class RSSProcessor {
     const keywords = this.extractKeywords(item.title + ' ' + cleanContent)
 
     try {
-      await prisma.article.create({
+      // Create article with default values first
+      const newArticle = await prisma.article.create({
         data: {
           title: item.title,
           content: cleanContent,
@@ -250,18 +257,48 @@ export class RSSProcessor {
           feedId,
           
           // Default classifications - will be updated by AI processing
-          location: 'NATIONAL', // Default, will be classified by AI
-          discriminationType: 'GENERAL_AI', // Default, will be classified by AI  
-          severity: 'MEDIUM', // Default, will be classified by AI
+          location: 'NATIONAL',
+          discriminationType: 'GENERAL_AI',
+          severity: 'MEDIUM',
           
           keywords,
-          organizations: [], // Will be extracted by AI
+          organizations: [],
           entities: {},
           
-          processed: false, // Will be processed by AI classification
+          processed: false,
           confidenceScore: 0.0
         }
       })
+
+      // Attempt AI classification if enabled
+      if (this.enableAIClassification) {
+        try {
+          await this.classifyArticle(newArticle.id, {
+            id: newArticle.id,
+            title: item.title,
+            content: cleanContent,
+            url: item.link,
+            source: sourceName,
+            publishedAt,
+            feedId,
+            location: 'NATIONAL',
+            discriminationType: 'GENERAL_AI',
+            severity: 'MEDIUM',
+            organizations: [],
+            keywords,
+            processed: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          })
+        } catch (aiError) {
+          // Log AI classification error but don't fail the article creation
+          console.warn(`⚠️  AI classification failed for article ${newArticle.id}:`, aiError instanceof Error ? aiError.message : aiError)
+          await this.logProcessing('AI_CLASSIFICATION', 'ERROR', 
+            `AI classification failed: ${aiError instanceof Error ? aiError.message : 'Unknown error'}`,
+            { articleId: newArticle.id, feedId }
+          )
+        }
+      }
 
       return { isNew: true }
     } catch (error) {
@@ -327,6 +364,66 @@ export class RSSProcessor {
       select: { successRate: true }
     })
     return feed?.successRate || 0.0
+  }
+
+  /**
+   * Classify an article using AI
+   */
+  private async classifyArticle(articleId: string, articleData: any): Promise<void> {
+    const startTime = Date.now()
+    
+    try {
+      const classification = await this.aiClassifier.classifyArticle(articleData)
+      const processingTime = Date.now() - startTime
+
+      // Update article with AI classification
+      await prisma.article.update({
+        where: { id: articleId },
+        data: {
+          location: classification.location,
+          discriminationType: classification.discriminationType,
+          severity: classification.severity,
+          confidenceScore: classification.confidenceScore,
+          organizations: classification.entities.organizations,
+          keywords: [...(articleData.keywords || []), ...classification.keywords],
+          entities: classification.entities,
+          processed: true,
+          aiClassification: {
+            reasoning: classification.reasoning,
+            entities: classification.entities,
+            timestamp: new Date().toISOString(),
+            processingTime,
+            provider: process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fallback'
+          }
+        }
+      })
+
+      // Log successful classification
+      await this.logProcessing('AI_CLASSIFICATION', 'SUCCESS',
+        `Article classified as ${classification.discriminationType}/${classification.severity}`,
+        { 
+          articleId, 
+          classification, 
+          processingTime,
+          confidenceScore: classification.confidenceScore
+        }
+      )
+
+      console.log(`🤖 AI classified article "${articleData.title}": ${classification.discriminationType}/${classification.severity} (${Math.round(classification.confidenceScore * 100)}% confidence)`)
+    } catch (error) {
+      const processingTime = Date.now() - startTime
+      
+      // Update article to mark as processed but with error
+      await prisma.article.update({
+        where: { id: articleId },
+        data: {
+          processed: true,
+          processingError: error instanceof Error ? error.message : 'Unknown AI classification error'
+        }
+      }).catch(console.error)
+
+      throw error // Re-throw to be handled by caller
+    }
   }
 
   /**
