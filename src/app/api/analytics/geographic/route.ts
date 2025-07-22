@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Convert to final format
     const locations = Array.from(locationMap.values()).map(location => ({
       ...location,
-      categories: Array.from(location.categories.entries()).map(([type, count]) => ({
+      categories: Array.from(location.categories.entries()).map(([type, count]: [string, number]) => ({
         type,
         count
       })).sort((a, b) => b.count - a.count)
