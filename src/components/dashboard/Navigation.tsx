@@ -1,14 +1,18 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', current: true },
-  { name: 'Articles', href: '/articles', current: false },
-  { name: 'Analytics', href: '/analytics', current: false },
-  { name: 'Admin', href: '/admin', current: false },
+  { name: 'Dashboard', href: '/dashboard' },
+  { name: 'Articles', href: '/articles' },
+  { name: 'Analytics', href: '/analytics' },
+  { name: 'Admin', href: '/admin' },
 ]
 
 export function Navigation() {
+  const pathname = usePathname()
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="container mx-auto px-4">
@@ -27,20 +31,23 @@ export function Navigation() {
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center space-x-8">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  'px-3 py-2 rounded-md text-sm font-medium transition-colors',
-                  item.current
-                    ? 'text-primary bg-primary/5 border-b-2 border-primary'
-                    : 'text-gray-600 hover:text-primary hover:bg-primary/5'
-                )}
-              >
-                {item.name}
-              </Link>
-            ))}
+            {navigation.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    'px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                    isActive
+                      ? 'text-primary bg-primary/5 border-b-2 border-primary'
+                      : 'text-gray-600 hover:text-primary hover:bg-primary/5'
+                  )}
+                >
+                  {item.name}
+                </Link>
+              )
+            })}
           </div>
 
           {/* Mobile menu button */}
