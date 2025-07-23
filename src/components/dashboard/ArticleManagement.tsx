@@ -123,12 +123,12 @@ export function ArticleManagement() {
               />
             </div>
 
-            <Select value={filters.discriminationType} onValueChange={(value) => updateFilter('discriminationType', value)}>
+            <Select value={filters.discriminationType || "all"} onValueChange={(value) => updateFilter('discriminationType', value === "all" ? "" : value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Discrimination Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="all">All Types</SelectItem>
                 <SelectItem value="racial">Racial</SelectItem>
                 <SelectItem value="disability">Disability</SelectItem>
                 <SelectItem value="religious">Religious</SelectItem>
@@ -137,12 +137,12 @@ export function ArticleManagement() {
               </SelectContent>
             </Select>
 
-            <Select value={filters.source} onValueChange={(value) => updateFilter('source', value)}>
+            <Select value={filters.source || "all"} onValueChange={(value) => updateFilter('source', value === "all" ? "" : value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Feed Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Sources</SelectItem>
+                <SelectItem value="all">All Sources</SelectItem>
                 {feeds.map(feed => (
                   <SelectItem key={feed} value={feed}>{feed}</SelectItem>
                 ))}
