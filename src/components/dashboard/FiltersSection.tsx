@@ -1,8 +1,21 @@
+'use client'
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Filter, Search } from 'lucide-react'
+import { Filter, Search, X } from 'lucide-react'
+import { useArticleFilters } from '@/hooks/useArticleFilters'
 
 export function FiltersSection() {
+  const { 
+    filters, 
+    updateFilter, 
+    clearFilters, 
+    hasActiveFilters, 
+    getActiveFilterLabels 
+  } = useArticleFilters()
+
+  const activeLabels = getActiveFilterLabels()
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -33,6 +46,8 @@ export function FiltersSection() {
                 <input
                   type="text"
                   placeholder="Search articles..."
+                  value={filters.search}
+                  onChange={(e) => updateFilter('search', e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
@@ -43,7 +58,11 @@ export function FiltersSection() {
               <label className="text-sm font-medium text-gray-700">
                 Location
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+              <select 
+                value={filters.location}
+                onChange={(e) => updateFilter('location', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
                 <option value="">All Locations</option>
                 <option value="michigan">Michigan</option>
                 <option value="national">National</option>
@@ -56,7 +75,11 @@ export function FiltersSection() {
               <label className="text-sm font-medium text-gray-700">
                 Type
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+              <select 
+                value={filters.discriminationType}
+                onChange={(e) => updateFilter('discriminationType', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
                 <option value="">All Types</option>
                 <option value="racial">Racial</option>
                 <option value="religious">Religious</option>
@@ -71,7 +94,11 @@ export function FiltersSection() {
               <label className="text-sm font-medium text-gray-700">
                 Severity
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+              <select 
+                value={filters.severity}
+                onChange={(e) => updateFilter('severity', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
                 <option value="">All Severity</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -84,7 +111,11 @@ export function FiltersSection() {
               <label className="text-sm font-medium text-gray-700">
                 Date Range
               </label>
-              <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+              <select 
+                value={filters.dateRange}
+                onChange={(e) => updateFilter('dateRange', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
                 <option value="7">Last 7 days</option>
                 <option value="30">Last 30 days</option>
                 <option value="90">Last 90 days</option>
@@ -94,20 +125,25 @@ export function FiltersSection() {
           </div>
 
           {/* Active Filters */}
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm text-gray-600">Active filters:</span>
-              <Badge variant="secondary">
-                Michigan
-              </Badge>
-              <Badge variant="secondary">
-                High Severity
-              </Badge>
-              <button className="text-sm text-primary hover:text-primary/80">
-                Clear all
-              </button>
+          {hasActiveFilters && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center flex-wrap gap-2">
+                <span className="text-sm text-gray-600">Active filters:</span>
+                {activeLabels.map((label, index) => (
+                  <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                    {label}
+                  </Badge>
+                ))}
+                <button 
+                  onClick={clearFilters}
+                  className="text-sm text-primary hover:text-primary/80 flex items-center gap-1"
+                >
+                  <X className="h-3 w-3" />
+                  Clear all
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

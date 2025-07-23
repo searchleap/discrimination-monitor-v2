@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const severity = searchParams.get('severity')
     const search = searchParams.get('search')
     const source = searchParams.get('source')
+    const days = searchParams.get('days')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = parseInt(searchParams.get('offset') || '0')
     const sortBy = searchParams.get('sortBy') || 'publishedAt'
@@ -31,6 +32,14 @@ export async function GET(request: NextRequest) {
 
     if (source) {
       where.source = source
+    }
+
+    if (days) {
+      const daysAgo = new Date()
+      daysAgo.setDate(daysAgo.getDate() - parseInt(days))
+      where.publishedAt = {
+        gte: daysAgo
+      }
     }
 
     if (search) {

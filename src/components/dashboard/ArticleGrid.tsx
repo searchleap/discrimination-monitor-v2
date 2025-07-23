@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ExternalLink, Clock, MapPin, AlertTriangle, Loader2 } from 'lucide-react'
+import { useArticleFilters } from '@/hooks/useArticleFilters'
 
 // Article interface matching the API response
 interface APIArticle {
@@ -312,85 +313,68 @@ function ArticleCard({ article }: { article: Article }) {
 export function ArticleGrid() {
   const articlesPerPage = 6
   const [articles, setArticles] = useState<Article[]>([])
-  const [filteredArticles, setFilteredArticles] = useState<Article[]>([])
   const [displayedArticles, setDisplayedArticles] = useState<Article[]>([])
-  const [activeFilter, setActiveFilter] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Fetch articles from API
+  
+  const { filters, hasActiveFilters, getActiveFilterLabels, getAPIParams } = useArticleFilters()
+  const activeLabels = getActiveFilterLabels()
+  // Fetch articles from API with filters
   useEffect(() => {
     async function fetchArticles() {
       try {
         setIsLoading(true)
         setError(null)
         
-        const response = await fetch('/api/articles?limit=50&sortBy=publishedAt&sortOrder=desc')
+        const apiParams = getAPIParams()
+        apiParams.append('limit', '50')
+        apiParams.append('sortBy', 'publishedAt')
+        apiParams.append('sortOrder', 'desc')
+        
+        const response = await fetch(`/api/articles?${apiParams.toString()}`)
         const data = await response.json()
         
         if (data.success) {
           const fetchedArticles = data.data as APIArticle[]
           setArticles(fetchedArticles)
-          setFilteredArticles(fetchedArticles)
           setDisplayedArticles(fetchedArticles.slice(0, articlesPerPage))
+          setCurrentPage(1)
         } else {
           console.warn('Failed to fetch articles, using mock data')
           // Fallback to mock data
           setArticles(mockArticles)
-          setFilteredArticles(mockArticles)
           setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
+          setCurrentPage(1)
         }
       } catch (error) {
         console.error('Error fetching articles:', error)
         setError('Failed to load articles')
         // Fallback to mock data  
         setArticles(mockArticles)
-        setFilteredArticles(mockArticles)
         setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
+        setCurrentPage(1)
       } finally {
         setIsLoading(false)
       }
     }
     
     fetchArticles()
-  }, [])
+  }, [filters, getAPIParams])
 
-  useEffect(() => {
-    const handleFilterEvent = (event: CustomEvent) => {
-      const { filter, label } = event.detail
-      setActiveFilter(label)
-      
-      // Filter articles based on the applied filter
-      const filtered = articles.filter(article => {
-        if (filter.location) {
-          return article.location === filter.location
-        }
-        if (filter.severity) {
-          return article.severity === filter.severity
-        }
-        return true
-      })
-      
-      setFilteredArticles(filtered)
-      setDisplayedArticles(filtered.slice(0, articlesPerPage))
-      setCurrentPage(1)
-    }
-    
-    window.addEventListener('applyFilter', handleFilterEvent as EventListener)
-    return () => window.removeEventListener('applyFilter', handleFilterEvent as EventListener)
-  }, [articles])
+  // No longer needed - filters are handled by the hook and API calls
   
   const loadMoreArticles = () => {
     const nextPage = currentPage + 1
     const startIndex = nextPage * articlesPerPage
     const endIndex = startIndex + articlesPerPage
-    const newArticles = filteredArticles.slice(startIndex, endIndex)
+    const newArticles = articles.slice(startIndex, endIndex)
     
     setDisplayedArticles(prev => [...prev, ...newArticles])
     setCurrentPage(nextPage)
   }
   
-  const hasMoreArticles = displayedArticles.length < filteredArticles.length
+  const hasMoreArticles = displayedArticles.length < articles.length
   
   // Show loading state
   if (isLoading) {
@@ -430,29 +414,24 @@ export function ArticleGrid() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <h2 className="text-lg font-semibold text-gray-900">
-            {activeFilter ? `Filtered Articles: ${activeFilter}` : 'Recent Articles'}
+            {hasActiveFilters ? `Filtered Articles` : 'Recent Articles'}
           </h2>
-          {activeFilter && (
-            <button
-              onClick={() => {
-                setActiveFilter(null)
-                setFilteredArticles(mockArticles)
-                setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
-                setCurrentPage(1)
-                window.history.pushState({}, '', window.location.pathname)
-              }}
-              className="text-sm text-primary hover:text-primary/80 underline"
-            >
-              Clear filter
-            </button>
+          {hasActiveFilters && activeLabels.length > 0 && (
+            <div className="flex items-center gap-1">
+              <span className="text-sm text-gray-500">•</span>
+              <span className="text-sm text-gray-600">{activeLabels[0]}</span>
+              {activeLabels.length > 1 && (
+                <span className="text-sm text-gray-500">+{activeLabels.length - 1} more</span>
+              )}
+            </div>
           )}
         </div>
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-500">
-            Showing {displayedArticles.length} of {filteredArticles.length} articles
+            Showing {displayedArticles.length} of {articles.length} articles
           </span>
           <Badge variant="outline">
-            {activeFilter || 'Michigan Priority'}
+            {hasActiveFilters ? 'Filtered' : 'All Articles'}
           </Badge>
         </div>
       </div>
@@ -463,21 +442,12 @@ export function ArticleGrid() {
         ))}
       </div>
       
-      {filteredArticles.length === 0 && (
+      {articles.length === 0 && !isLoading && (
         <div className="text-center py-8 text-gray-500">
-          <p>No articles found for the selected filter.</p>
-          <button
-            onClick={() => {
-              setActiveFilter(null)
-              setFilteredArticles(articles)
-              setDisplayedArticles(articles.slice(0, articlesPerPage))
-              setCurrentPage(1)
-              window.history.pushState({}, '', window.location.pathname)
-            }}
-            className="mt-2 text-primary hover:text-primary/80 underline"
-          >
-            Show all articles
-          </button>
+          <p>No articles found for the selected filters.</p>
+          {hasActiveFilters && (
+            <p className="text-sm mt-2">Try adjusting your filter criteria or clearing all filters.</p>
+          )}
         </div>
       )}
 
@@ -488,7 +458,7 @@ export function ArticleGrid() {
             onClick={loadMoreArticles}
             className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
           >
-            Load More Articles ({filteredArticles.length - displayedArticles.length} remaining)
+            Load More Articles ({articles.length - displayedArticles.length} remaining)
           </button>
         </div>
       )}

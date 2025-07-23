@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Eye, ExternalLink, Filter, Search, Calendar, Tag, AlertTriangle } from 'lucide-react'
+import { useArticleFilters } from '@/hooks/useArticleFilters'
 
 interface Article {
   id: string
@@ -33,13 +34,9 @@ const classificationColors = {
 export function ArticleManagement() {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({
-    search: '',
-    classification: 'all',
-    feed: 'all',
-    dateRange: '7'
-  })
   const [feeds, setFeeds] = useState<string[]>([])
+  
+  const { filters, updateFilter, getAPIParams } = useArticleFilters()
 
   useEffect(() => {
     fetchArticles()
@@ -49,13 +46,12 @@ export function ArticleManagement() {
   const fetchArticles = async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams()
-      if (filters.search) params.append('search', filters.search)
-      if (filters.classification !== 'all') params.append('classification', filters.classification)
-      if (filters.feed !== 'all') params.append('feed', filters.feed)
-      if (filters.dateRange !== 'all') params.append('days', filters.dateRange)
+      const apiParams = getAPIParams()
+      apiParams.append('limit', '100') // Show more articles in management view
+      apiParams.append('sortBy', 'publishedAt')
+      apiParams.append('sortOrder', 'desc')
 
-      const response = await fetch(`/api/articles?${params}`)
+      const response = await fetch(`/api/articles?${apiParams.toString()}`)
       if (response.ok) {
         const data = await response.json()
         setArticles(data.data || [])
@@ -123,39 +119,37 @@ export function ArticleManagement() {
                 placeholder="Search articles..."
                 className="pl-10"
                 value={filters.search}
-                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                onChange={(e) => updateFilter('search', e.target.value)}
               />
             </div>
 
-            <Select value={filters.classification} onValueChange={(value) => setFilters(prev => ({ ...prev, classification: value }))}>
+            <Select value={filters.discriminationType} onValueChange={(value) => updateFilter('discriminationType', value)}>
               <SelectTrigger>
-                <SelectValue placeholder="Classification" />
+                <SelectValue placeholder="Discrimination Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Classifications</SelectItem>
-                <SelectItem value="RACIAL">Racial</SelectItem>
-                <SelectItem value="DISABILITY">Disability</SelectItem>
-                <SelectItem value="RELIGIOUS">Religious</SelectItem>
-                <SelectItem value="GENDER">Gender</SelectItem>
-                <SelectItem value="AGE">Age</SelectItem>
-                <SelectItem value="GENERAL_AI">General AI</SelectItem>
-                <SelectItem value="neutral">Neutral</SelectItem>
+                <SelectItem value="">All Types</SelectItem>
+                <SelectItem value="racial">Racial</SelectItem>
+                <SelectItem value="disability">Disability</SelectItem>
+                <SelectItem value="religious">Religious</SelectItem>
+                <SelectItem value="general_ai">General AI</SelectItem>
+                <SelectItem value="multiple">Multiple</SelectItem>
               </SelectContent>
             </Select>
 
-            <Select value={filters.feed} onValueChange={(value) => setFilters(prev => ({ ...prev, feed: value }))}>
+            <Select value={filters.source} onValueChange={(value) => updateFilter('source', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Feed Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="">All Sources</SelectItem>
                 {feeds.map(feed => (
                   <SelectItem key={feed} value={feed}>{feed}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Select value={filters.dateRange} onValueChange={(value) => setFilters(prev => ({ ...prev, dateRange: value }))}>
+            <Select value={filters.dateRange} onValueChange={(value) => updateFilter('dateRange', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Date Range" />
               </SelectTrigger>
@@ -164,7 +158,7 @@ export function ArticleManagement() {
                 <SelectItem value="7">Last 7 days</SelectItem>
                 <SelectItem value="30">Last 30 days</SelectItem>
                 <SelectItem value="90">Last 90 days</SelectItem>
-                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="180">Last 6 months</SelectItem>
               </SelectContent>
             </Select>
           </div>
