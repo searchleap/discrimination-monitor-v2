@@ -1,25 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Feed } from '@/types'
-
-// Mock feed data - will be replaced with database queries
-const mockFeeds: Feed[] = [
-  {
-    id: 'feed-1',
-    name: 'Michigan Civil Rights News',
-    url: 'https://example.com/michigan-civil-rights.rss',
-    category: 'CIVIL_RIGHTS',
-    isActive: true,
-    lastFetched: new Date('2025-01-09T06:00:00Z'),
-    status: 'ACTIVE',
-    errorMessage: null,
-    successRate: 0.95,
-    customHeaders: null,
-    processingRules: null,
-    priority: 1,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-09T06:00:00Z'),
-  },
-]
+import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,
@@ -27,7 +7,16 @@ export async function GET(
 ) {
   const params = await context.params
   try {
-    const feed = mockFeeds.find(f => f.id === params.id)
+    const feed = await prisma.feed.findUnique({
+      where: { id: params.id },
+      include: {
+        _count: {
+          select: {
+            articles: true
+          }
+        }
+      }
+    })
     
     if (!feed) {
       return NextResponse.json(
@@ -41,7 +30,6 @@ export async function GET(
       data: feed
     })
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error fetching feed:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to fetch feed' },
@@ -57,24 +45,53 @@ export async function PUT(
   const params = await context.params
   try {
     const body = await request.json()
-    const feedIndex = mockFeeds.findIndex(f => f.id === params.id)
     
-    if (feedIndex === -1) {
+    // Check if feed exists
+    const existingFeed = await prisma.feed.findUnique({
+      where: { id: params.id }
+    })
+    
+    if (!existingFeed) {
       return NextResponse.json(
         { success: false, error: 'Feed not found' },
         { status: 404 }
       )
     }
 
-    // Update feed
-    const updatedFeed = {
-      ...mockFeeds[feedIndex],
-      ...body,
-      id: params.id, // Prevent ID changes
-      updatedAt: new Date()
+    // Check for URL conflicts if URL is being changed
+    if (body.url && body.url !== existingFeed.url) {
+      const urlConflict = await prisma.feed.findUnique({
+        where: { url: body.url }
+      })
+      
+      if (urlConflict) {
+        return NextResponse.json(
+          { success: false, error: 'A feed with this URL already exists' },
+          { status: 409 }
+        )
+      }
     }
 
-    mockFeeds[feedIndex] = updatedFeed
+    // Update feed in database
+    const updatedFeed = await prisma.feed.update({
+      where: { id: params.id },
+      data: {
+        name: body.name,
+        url: body.url,
+        category: body.category,
+        isActive: body.isActive,
+        priority: body.priority,
+        customHeaders: body.customHeaders,
+        processingRules: body.processingRules
+      },
+      include: {
+        _count: {
+          select: {
+            articles: true
+          }
+        }
+      }
+    })
 
     return NextResponse.json({
       success: true,
@@ -82,7 +99,53 @@ export async function PUT(
       message: 'Feed updated successfully'
     })
   } catch (error) {
-    // eslint-disable-next-line no-console
+    console.error('Error updating feed:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to update feed' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const params = await context.params
+  try {
+    const body = await request.json()
+    
+    // Check if feed exists
+    const existingFeed = await prisma.feed.findUnique({
+      where: { id: params.id }
+    })
+    
+    if (!existingFeed) {
+      return NextResponse.json(
+        { success: false, error: 'Feed not found' },
+        { status: 404 }
+      )
+    }
+
+    // Update only provided fields
+    const updatedFeed = await prisma.feed.update({
+      where: { id: params.id },
+      data: body,
+      include: {
+        _count: {
+          select: {
+            articles: true
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: updatedFeed,
+      message: 'Feed updated successfully'
+    })
+  } catch (error) {
     console.error('Error updating feed:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to update feed' },
@@ -97,24 +160,28 @@ export async function DELETE(
 ) {
   const params = await context.params
   try {
-    const feedIndex = mockFeeds.findIndex(f => f.id === params.id)
+    // Check if feed exists
+    const existingFeed = await prisma.feed.findUnique({
+      where: { id: params.id }
+    })
     
-    if (feedIndex === -1) {
+    if (!existingFeed) {
       return NextResponse.json(
         { success: false, error: 'Feed not found' },
         { status: 404 }
       )
     }
 
-    // Remove feed
-    mockFeeds.splice(feedIndex, 1)
+    // Delete feed from database (cascade will delete related articles)
+    await prisma.feed.delete({
+      where: { id: params.id }
+    })
 
     return NextResponse.json({
       success: true,
       message: 'Feed deleted successfully'
     })
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error deleting feed:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to delete feed' },

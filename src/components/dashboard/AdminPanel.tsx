@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Settings, 
   Database, 
@@ -104,8 +105,23 @@ export function AdminPanel() {
   const [newFeed, setNewFeed] = useState({
     name: '',
     url: '',
-    category: 'GENERAL'
+    category: 'CIVIL_RIGHTS'
   })
+  const [editingFeed, setEditingFeed] = useState<RSSFeed | null>(null)
+  const [addFeedError, setAddFeedError] = useState<string | null>(null)
+
+  const feedCategories = [
+    'CIVIL_RIGHTS',
+    'GOVERNMENT', 
+    'ACADEMIC',
+    'TECH_NEWS',
+    'LEGAL',
+    'HEALTHCARE',
+    'MICHIGAN_LOCAL',
+    'EMPLOYMENT',
+    'DATA_ETHICS',
+    'ADVOCACY'
+  ]
 
   useEffect(() => {
     fetchSystemData()
@@ -119,39 +135,18 @@ export function AdminPanel() {
         const feedsResponse = await fetch('/api/feeds')
         if (feedsResponse.ok) {
           const feedsData = await feedsResponse.json()
-          // Handle both direct array and nested data structure
-          const feedsArray = Array.isArray(feedsData) ? feedsData : (feedsData.data || [])
-          setFeeds(feedsArray)
+          // API returns { success: boolean, data: Feed[], pagination: object }
+          if (feedsData.success && Array.isArray(feedsData.data)) {
+            setFeeds(feedsData.data)
+          } else {
+            setFeeds([])
+          }
         } else {
-          // Use mock feeds if API fails
-          setFeeds([
-            {
-              id: '1',
-              name: 'Michigan Tech News',
-              url: 'https://example.com/michigan-tech',
-              category: 'TECH_NEWS',
-              isActive: true,
-              lastFetched: new Date().toISOString(),
-              status: 'ACTIVE',
-              errorMessage: null,
-              successRate: 0.95
-            },
-            {
-              id: '2', 
-              name: 'Civil Rights Today',
-              url: 'https://example.com/civil-rights',
-              category: 'CIVIL_RIGHTS',
-              isActive: true,
-              lastFetched: new Date().toISOString(),
-              status: 'ACTIVE',
-              errorMessage: null,
-              successRate: 0.88
-            }
-          ])
+          setFeeds([])
         }
       } catch (feedError) {
         console.error('Failed to fetch feeds:', feedError)
-        setFeeds([]) // Set empty array as fallback
+        setFeeds([])
       }
 
       // Fetch system status with error handling
@@ -181,7 +176,34 @@ export function AdminPanel() {
     }
   }
 
+  const validateUrl = (url: string): boolean => {
+    try {
+      new URL(url)
+      return url.includes('rss') || url.includes('feed') || url.includes('xml')
+    } catch {
+      return false
+    }
+  }
+
   const handleAddFeed = async () => {
+    setAddFeedError(null)
+    
+    // Validate inputs
+    if (!newFeed.name.trim()) {
+      setAddFeedError('Feed name is required')
+      return
+    }
+    
+    if (!newFeed.url.trim()) {
+      setAddFeedError('RSS URL is required')
+      return
+    }
+    
+    if (!validateUrl(newFeed.url)) {
+      setAddFeedError('Please enter a valid RSS feed URL')
+      return
+    }
+
     try {
       const response = await fetch('/api/feeds', {
         method: 'POST',
@@ -191,13 +213,54 @@ export function AdminPanel() {
         body: JSON.stringify(newFeed)
       })
 
-      if (response.ok) {
-        setNewFeed({ name: '', url: '', category: 'GENERAL' })
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setNewFeed({ name: '', url: '', category: 'CIVIL_RIGHTS' })
         setShowAddFeed(false)
+        setAddFeedError(null)
         fetchSystemData() // Refresh data
+      } else {
+        setAddFeedError(result.error || 'Failed to add feed')
       }
     } catch (error) {
       console.error('Failed to add feed:', error)
+      setAddFeedError('Network error. Please try again.')
+    }
+  }
+
+  const handleEditFeed = async (feed: RSSFeed) => {
+    setEditingFeed(feed)
+  }
+
+  const handleUpdateFeed = async () => {
+    if (!editingFeed) return
+
+    try {
+      const response = await fetch(`/api/feeds/${editingFeed.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: editingFeed.name,
+          url: editingFeed.url,
+          category: editingFeed.category,
+          isActive: editingFeed.isActive
+        })
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setEditingFeed(null)
+        fetchSystemData() // Refresh data
+      } else {
+        alert(result.error || 'Failed to update feed')
+      }
+    } catch (error) {
+      console.error('Failed to update feed:', error)
+      alert('Network error. Please try again.')
     }
   }
 
@@ -342,24 +405,94 @@ export function AdminPanel() {
                 <CardTitle className="text-lg">Add New RSS Feed</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {addFeedError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-sm text-red-600">{addFeedError}</p>
+                  </div>
+                )}
                 <Input
-                  placeholder="Feed Name"
+                  placeholder="Feed Name (e.g., Michigan Civil Rights News)"
                   value={newFeed.name}
                   onChange={(e) => setNewFeed(prev => ({ ...prev, name: e.target.value }))}
                 />
                 <Input
-                  placeholder="RSS URL"
+                  placeholder="RSS URL (e.g., https://example.com/feed.xml)"
                   value={newFeed.url}
                   onChange={(e) => setNewFeed(prev => ({ ...prev, url: e.target.value }))}
                 />
-                <Input
-                  placeholder="Category"
-                  value={newFeed.category}
-                  onChange={(e) => setNewFeed(prev => ({ ...prev, category: e.target.value }))}
-                />
+                <Select 
+                  value={newFeed.category} 
+                  onValueChange={(value) => setNewFeed(prev => ({ ...prev, category: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {feedCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <div className="flex gap-2">
-                  <Button onClick={handleAddFeed}>Add Feed</Button>
-                  <Button variant="outline" onClick={() => setShowAddFeed(false)}>Cancel</Button>
+                  <Button onClick={handleAddFeed} disabled={!newFeed.name.trim() || !newFeed.url.trim()}>
+                    Add Feed
+                  </Button>
+                  <Button variant="outline" onClick={() => {
+                    setShowAddFeed(false)
+                    setAddFeedError(null)
+                    setNewFeed({ name: '', url: '', category: 'CIVIL_RIGHTS' })
+                  }}>
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Edit Feed Form */}
+          {editingFeed && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Edit RSS Feed</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input
+                  placeholder="Feed Name"
+                  value={editingFeed.name}
+                  onChange={(e) => setEditingFeed(prev => prev ? { ...prev, name: e.target.value } : null)}
+                />
+                <Input
+                  placeholder="RSS URL"
+                  value={editingFeed.url}
+                  onChange={(e) => setEditingFeed(prev => prev ? { ...prev, url: e.target.value } : null)}
+                />
+                <Select 
+                  value={editingFeed.category} 
+                  onValueChange={(value) => setEditingFeed(prev => prev ? { ...prev, category: value } : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {feedCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category.replace(/_/g, ' ')}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Active</label>
+                  <Switch
+                    checked={editingFeed.isActive}
+                    onCheckedChange={(checked) => setEditingFeed(prev => prev ? { ...prev, isActive: checked } : null)}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleUpdateFeed}>Save Changes</Button>
+                  <Button variant="outline" onClick={() => setEditingFeed(null)}>Cancel</Button>
                 </div>
               </CardContent>
             </Card>
@@ -383,14 +516,14 @@ export function AdminPanel() {
                     )}
                   </div>
                   <p className="text-sm text-gray-600 truncate max-w-md">{feed.url}</p>
-                  <div className="text-xs text-gray-500">
-                    Success Rate: {(feed.successRate * 100).toFixed(0)}% • Last fetched: {
-                      feed.lastFetched 
-                        ? new Date(feed.lastFetched).toLocaleString()
-                        : 'Never'
-                    }
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div>
+                      Success Rate: {(feed.successRate * 100).toFixed(0)}% • 
+                      Last fetched: {feed.lastFetched ? new Date(feed.lastFetched).toLocaleString() : 'Never'} •
+                      Articles: {(feed as any)._count?.articles || 0}
+                    </div>
                     {feed.errorMessage && (
-                      <span className="text-red-600"> • Error: {feed.errorMessage}</span>
+                      <div className="text-red-600 font-medium">Error: {feed.errorMessage}</div>
                     )}
                   </div>
                 </div>
@@ -399,7 +532,11 @@ export function AdminPanel() {
                     checked={feed.isActive}
                     onCheckedChange={(checked) => handleToggleFeed(feed.id, checked)}
                   />
-                  <Button size="sm" variant="outline">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleEditFeed(feed)}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button 
