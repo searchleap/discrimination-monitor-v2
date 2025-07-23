@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       batchCount: (body.batchCount || 0) + 1,
       totalProcessed: body.totalProcessed || 0,
       maxBatches: body.maxBatches || 20, // Maximum batches per auto-process session
-      maxExecutionTime: body.maxExecutionTime || 480000 // 8 minutes max execution time
+      maxExecutionTime: body.maxExecutionTime || 240000 // 4 minutes max execution time
     };
 
     console.log(`🔄 Auto-processing batch ${session.batchCount}/${session.maxBatches} (Session: ${session.sessionId})`);
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     // Check remaining queue size and trigger next batch if needed
     const remainingArticles = await aiProcessingQueue.getQueueMetrics();
     
-    if (remainingArticles.pending > 0 && session.batchCount < session.maxBatches && elapsedTime < session.maxExecutionTime - 30000) {
+    if (remainingArticles.pending > 0 && session.batchCount < session.maxBatches && elapsedTime < session.maxExecutionTime - 15000) {
       // Trigger next batch asynchronously (fire-and-forget)
       console.log(`🔄 Triggering next batch - ${remainingArticles.pending} articles remaining`);
       

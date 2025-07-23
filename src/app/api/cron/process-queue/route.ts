@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     // Use existing serverless worker to process articles
     const worker = new ServerlessAIWorker({
       batchSize: 5,
-      maxProcessingTime: 540000 // 9 minutes (safe buffer for 10min limit)
+      maxProcessingTime: 240000 // 4 minutes (safe buffer for 5min limit)
     });
     const result = await worker.startProcessing();
 

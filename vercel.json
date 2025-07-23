@@ -9,7 +9,7 @@
       "maxDuration": 60
     },
     "src/app/api/cron/process-queue/route.ts": {
-      "maxDuration": 600
+      "maxDuration": 300
     }
   },
   "crons": [
