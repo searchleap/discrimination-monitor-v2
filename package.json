@@ -21,7 +21,8 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:init": "node scripts/init-database.js",
-    "db:setup": "prisma generate && prisma db push && prisma db seed && node scripts/init-database.js"
+    "db:setup": "prisma generate && prisma db push && prisma db seed && node scripts/init-database.js",
+    "db:fix": "node scripts/fix-production-database.js"
   },
   "dependencies": {
     "@prisma/client": "^5.21.1",
