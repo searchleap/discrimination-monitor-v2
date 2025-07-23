@@ -25,8 +25,13 @@ export function useArticleFilters() {
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // Initialize filters from URL parameters
+  // Initialize filters from URL parameters with safe fallback
   const [filters, setFilters] = useState<ArticleFilters>(() => {
+    // Handle case where searchParams might be null during SSR
+    if (!searchParams) {
+      return defaultFilters
+    }
+    
     return {
       search: searchParams.get('search') || defaultFilters.search,
       location: searchParams.get('location') || defaultFilters.location,
@@ -39,6 +44,11 @@ export function useArticleFilters() {
 
   // Update URL when filters change
   const updateURL = useCallback((newFilters: ArticleFilters) => {
+    // Skip URL updates during SSR or if window is not available
+    if (typeof window === 'undefined') {
+      return
+    }
+    
     const params = new URLSearchParams()
     
     Object.entries(newFilters).forEach(([key, value]) => {

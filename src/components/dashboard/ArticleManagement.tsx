@@ -57,7 +57,7 @@ export function ArticleManagement() {
         setArticles(data.data || [])
       }
     } catch (error) {
-      console.error('Failed to fetch articles:', error)
+      // Handle fetch error silently
     } finally {
       setLoading(false)
     }
@@ -68,7 +68,7 @@ export function ArticleManagement() {
       // Mock feed sources for now
       setFeeds(['Michigan Tech News', 'Civil Rights Today', 'Healthcare AI Journal', 'Employment Law Review'])
     } catch (error) {
-      console.error('Failed to fetch feeds:', error)
+      // Handle feeds fetch error silently
     }
   }
 
@@ -87,7 +87,7 @@ export function ArticleManagement() {
         fetchArticles()
       }
     } catch (error) {
-      console.error('Failed to update classification:', error)
+      // Handle classification update error silently
     }
   }
 

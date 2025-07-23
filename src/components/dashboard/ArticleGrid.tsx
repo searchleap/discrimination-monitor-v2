@@ -341,14 +341,12 @@ export function ArticleGrid() {
           setDisplayedArticles(fetchedArticles.slice(0, articlesPerPage))
           setCurrentPage(1)
         } else {
-          console.warn('Failed to fetch articles, using mock data')
-          // Fallback to mock data
+          // Failed to fetch articles, using mock data
           setArticles(mockArticles)
           setDisplayedArticles(mockArticles.slice(0, articlesPerPage))
           setCurrentPage(1)
         }
       } catch (error) {
-        console.error('Error fetching articles:', error)
         setError('Failed to load articles')
         // Fallback to mock data  
         setArticles(mockArticles)

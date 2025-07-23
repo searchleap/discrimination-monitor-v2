@@ -24,7 +24,9 @@ export default function DashboardPage() {
 
       {/* Filters */}
       <section className="animate-fadeIn">
-        <FiltersSection />
+        <Suspense fallback={<LoadingSpinner />}>
+          <FiltersSection />
+        </Suspense>
       </section>
 
       {/* Article Grid */}

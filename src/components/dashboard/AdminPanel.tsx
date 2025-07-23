@@ -145,7 +145,7 @@ export function AdminPanel() {
           setFeeds([])
         }
       } catch (feedError) {
-        console.error('Failed to fetch feeds:', feedError)
+        // Failed to fetch feeds, using empty array as fallback
         setFeeds([])
       }
 
@@ -157,7 +157,7 @@ export function AdminPanel() {
           setSystemStatus(statusData)
         }
       } catch (statusError) {
-        console.error('Failed to fetch system status:', statusError)
+        // Failed to fetch system status, using mock data
         // Set mock system status
         setSystemStatus({
           database: 'disconnected',
@@ -170,7 +170,7 @@ export function AdminPanel() {
         })
       }
     } catch (error) {
-      console.error('Failed to fetch system data:', error)
+      // Failed to fetch system data
     } finally {
       setLoading(false)
     }
@@ -224,7 +224,6 @@ export function AdminPanel() {
         setAddFeedError(result.error || 'Failed to add feed')
       }
     } catch (error) {
-      console.error('Failed to add feed:', error)
       setAddFeedError('Network error. Please try again.')
     }
   }
@@ -259,7 +258,6 @@ export function AdminPanel() {
         alert(result.error || 'Failed to update feed')
       }
     } catch (error) {
-      console.error('Failed to update feed:', error)
       alert('Network error. Please try again.')
     }
   }
@@ -278,7 +276,7 @@ export function AdminPanel() {
         fetchSystemData() // Refresh data
       }
     } catch (error) {
-      console.error('Failed to update feed:', error)
+      // Handle update error silently
     }
   }
 
@@ -294,7 +292,7 @@ export function AdminPanel() {
         fetchSystemData() // Refresh data
       }
     } catch (error) {
-      console.error('Failed to delete feed:', error)
+      // Handle delete error silently
     }
   }
 
@@ -309,7 +307,6 @@ export function AdminPanel() {
         fetchSystemData() // Refresh status
       }
     } catch (error) {
-      console.error('Failed to start RSS processing:', error)
       alert('Failed to start RSS processing')
     }
   }
