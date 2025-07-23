@@ -44,6 +44,35 @@ interface QueueStatus {
   workerStatus: 'running' | 'stopped' | 'error'
 }
 
+interface WorkerStatus {
+  isRunning: boolean
+  isProcessing: boolean
+  startedAt?: string
+  lastProcessedAt?: string
+  processedCount: number
+  errorCount: number
+  currentBatch?: string[]
+  nextScheduledAt?: string
+  health: 'healthy' | 'warning' | 'error'
+  uptime?: number
+}
+
+interface WorkerMetrics {
+  totalProcessed: number
+  totalErrors: number
+  averageProcessingTime: number
+  batchesCompleted: number
+  lastHourThroughput: number
+  successRate: number
+  uptime: number
+}
+
+interface WorkerData {
+  status: WorkerStatus
+  metrics: WorkerMetrics
+  timestamp: string
+}
+
 interface AIProcessingData {
   metrics: QueueMetrics
   status: QueueStatus
@@ -79,27 +108,31 @@ interface BulkAddData {
 export function AIProcessingMonitor() {
   const [data, setData] = useState<AIProcessingData | null>(null)
   const [bulkAddData, setBulkAddData] = useState<BulkAddData | null>(null)
+  const [workerData, setWorkerData] = useState<WorkerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [bulkAdding, setBulkAdding] = useState(false)
+  const [workerOperating, setWorkerOperating] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Fetch AI processing status
   const fetchData = async () => {
     try {
-      const [statusResponse, bulkResponse] = await Promise.all([
+      const [statusResponse, bulkResponse, workerResponse] = await Promise.all([
         fetch('/api/ai-queue/status'),
-        fetch('/api/ai-queue/bulk-add')
+        fetch('/api/ai-queue/bulk-add'),
+        fetch('/api/background/ai-worker/status')
       ])
 
-      if (!statusResponse.ok || !bulkResponse.ok) {
+      if (!statusResponse.ok || !bulkResponse.ok || !workerResponse.ok) {
         throw new Error('Failed to fetch AI processing data')
       }
 
       const statusData = await statusResponse.json()
       const bulkData = await bulkResponse.json()
+      const workerDataResult = await workerResponse.json()
 
       if (statusData.success) {
         setData(statusData.data)
@@ -107,6 +140,10 @@ export function AIProcessingMonitor() {
       
       if (bulkData.success) {
         setBulkAddData(bulkData.data)
+      }
+
+      if (workerDataResult.success) {
+        setWorkerData(workerDataResult.data)
       }
       
       setError(null)
@@ -201,6 +238,75 @@ export function AIProcessingMonitor() {
     }
   }
 
+  // Start background worker
+  const handleStartWorker = async () => {
+    setWorkerOperating(true)
+    try {
+      const response = await fetch('/api/background/ai-worker/start', {
+        method: 'POST'
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await fetchData()
+        console.log('Worker started:', result.message)
+      } else {
+        setError(result.error || 'Failed to start worker')
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to start worker')
+    } finally {
+      setWorkerOperating(false)
+    }
+  }
+
+  // Stop background worker
+  const handleStopWorker = async () => {
+    setWorkerOperating(true)
+    try {
+      const response = await fetch('/api/background/ai-worker/stop', {
+        method: 'POST'
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await fetchData()
+        console.log('Worker stopped:', result.message)
+      } else {
+        setError(result.error || 'Failed to stop worker')
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to stop worker')
+    } finally {
+      setWorkerOperating(false)
+    }
+  }
+
+  // Restart background worker
+  const handleRestartWorker = async () => {
+    setWorkerOperating(true)
+    try {
+      const response = await fetch('/api/background/ai-worker/restart', {
+        method: 'POST'
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await fetchData()
+        console.log('Worker restarted:', result.message)
+      } else {
+        setError(result.error || 'Failed to restart worker')
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to restart worker')
+    } finally {
+      setWorkerOperating(false)
+    }
+  }
+
   const getHealthColor = (health: string) => {
     switch (health) {
       case 'healthy': return 'text-green-600 bg-green-50'
@@ -281,7 +387,22 @@ export function AIProcessingMonitor() {
       )}
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Background Worker</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${workerData?.status.isRunning ? 'text-green-600' : 'text-red-600'}`}>
+              {workerData?.status.isRunning ? 'Running' : 'Stopped'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {workerData?.status.health && `Health: ${workerData.status.health}`}
+            </p>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Queue Health</CardTitle>
@@ -292,7 +413,7 @@ export function AIProcessingMonitor() {
               {data.health.charAt(0).toUpperCase() + data.health.slice(1)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {data.status.workerStatus === 'running' ? 'Worker active' : 'Worker stopped'}
+              {data.status.workerStatus === 'running' ? 'Queue active' : 'Queue idle'}
             </p>
           </CardContent>
         </Card>
@@ -316,8 +437,12 @@ export function AIProcessingMonitor() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data.processingSpeed.articlesPerHour}</div>
-            <p className="text-xs text-muted-foreground">articles/hour</p>
+            <div className="text-2xl font-bold">
+              {workerData?.metrics.lastHourThroughput || data.processingSpeed.articlesPerHour}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {workerData ? 'last hour' : 'articles/hour'}
+            </p>
           </CardContent>
         </Card>
 
@@ -340,6 +465,7 @@ export function AIProcessingMonitor() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="queue">Queue Status</TabsTrigger>
+          <TabsTrigger value="worker">Background Worker</TabsTrigger>
           <TabsTrigger value="activity">Recent Activity</TabsTrigger>
           <TabsTrigger value="controls">Controls</TabsTrigger>
         </TabsList>
@@ -469,6 +595,214 @@ export function AIProcessingMonitor() {
                   </div>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="worker" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Worker Status</CardTitle>
+                <CardDescription>Background worker current status and metrics</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {workerData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className={`text-2xl font-bold ${workerData.status.isRunning ? 'text-green-600' : 'text-red-600'}`}>
+                          {workerData.status.isRunning ? 'Running' : 'Stopped'}
+                        </div>
+                        <p className="text-sm text-muted-foreground">Status</p>
+                      </div>
+                      <div>
+                        <div className={`text-2xl font-bold ${getHealthColor(workerData.status.health)}`}>
+                          {workerData.status.health.charAt(0).toUpperCase() + workerData.status.health.slice(1)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">Health</p>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Processed Count:</span>
+                        <span className="font-medium">{workerData.status.processedCount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Error Count:</span>
+                        <span className="font-medium">{workerData.status.errorCount}</span>
+                      </div>
+                      {workerData.status.uptime && (
+                        <div className="flex justify-between">
+                          <span>Uptime:</span>
+                          <span className="font-medium">
+                            {Math.round(workerData.status.uptime / 1000 / 60)} minutes
+                          </span>
+                        </div>
+                      )}
+                      {workerData.status.lastProcessedAt && (
+                        <div className="flex justify-between">
+                          <span>Last Processed:</span>
+                          <span className="font-medium">
+                            {new Date(workerData.status.lastProcessedAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      )}
+                      {workerData.status.nextScheduledAt && (
+                        <div className="flex justify-between">
+                          <span>Next Scheduled:</span>
+                          <span className="font-medium">
+                            {new Date(workerData.status.nextScheduledAt).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    Worker data not available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Worker Performance</CardTitle>
+                <CardDescription>Processing metrics and efficiency</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {workerData ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600">{workerData.metrics.totalProcessed}</div>
+                        <p className="text-sm text-muted-foreground">Total Processed</p>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-orange-600">{workerData.metrics.lastHourThroughput}</div>
+                        <p className="text-sm text-muted-foreground">Last Hour</p>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Success Rate</span>
+                          <span>{Math.round(workerData.metrics.successRate * 100)}%</span>
+                        </div>
+                        <Progress value={workerData.metrics.successRate * 100} />
+                      </div>
+                      
+                      <div className="pt-2 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Batches Completed:</span>
+                          <span className="font-medium">{workerData.metrics.batchesCompleted}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Avg Processing Time:</span>
+                          <span className="font-medium">
+                            {Math.round(workerData.metrics.averageProcessingTime / 1000)}s
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Total Errors:</span>
+                          <span className="font-medium">{workerData.metrics.totalErrors}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    Performance metrics not available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Worker Controls */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Worker Controls</CardTitle>
+              <CardDescription>Start, stop, and manage the background worker</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center space-x-4">
+                <Button 
+                  onClick={handleStartWorker}
+                  disabled={workerOperating || (workerData?.status.isRunning ?? false)}
+                  className="flex items-center space-x-2"
+                >
+                  {workerOperating ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  <span>Start Worker</span>
+                </Button>
+
+                <Button 
+                  onClick={handleStopWorker}
+                  disabled={workerOperating || !(workerData?.status.isRunning ?? false)}
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                >
+                  {workerOperating ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Pause className="h-4 w-4" />
+                  )}
+                  <span>Stop Worker</span>
+                </Button>
+
+                <Button 
+                  onClick={handleRestartWorker}
+                  disabled={workerOperating}
+                  variant="secondary"
+                  className="flex items-center space-x-2"
+                >
+                  {workerOperating ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span>Restart Worker</span>
+                </Button>
+              </div>
+
+              {workerData?.status.isRunning && (
+                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800">
+                        Background worker is running
+                      </p>
+                      <p className="text-xs text-green-600">
+                        Automatically processing queue every {Math.round((30000) / 1000)} seconds
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!workerData?.status.isRunning && (
+                <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+                  <div className="flex items-center">
+                    <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-yellow-800">
+                        Background worker is stopped
+                      </p>
+                      <p className="text-xs text-yellow-600">
+                        Queue processing requires manual triggers or worker restart
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
