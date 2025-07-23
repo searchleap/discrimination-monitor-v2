@@ -17,6 +17,12 @@ Fixed filtering functionality issues and implemented comprehensive RSS processin
 3. **API Parameter Consistency**: Frontend and backend parameter handling inconsistencies
    - **Solution**: Simplified parameter flow, API handles all transformations
 
+4. **🆕 Metric Card Filtering Disconnected**: Dashboard metric cards (Michigan, National, High Severity) were not applying filters
+   - **Problem**: HeroMetrics cards dispatched custom events but useArticleFilters hook wasn't listening
+   - **Solution**: Added event listener in useArticleFilters hook to handle `applyFilter` custom events
+   - **Features**: Cards now apply filters, clear other filters for focused view, update URL parameters
+   - **Files**: `src/hooks/useArticleFilters.ts`, `src/components/dashboard/HeroMetrics.tsx`
+
 ### **✅ RSS Processing Monitoring Implemented**
 1. **Progress Indicators**: Added comprehensive RSS processing status monitoring
    - **New API**: `/api/rss-status` - provides detailed feed status overview
@@ -71,6 +77,19 @@ curl "http://localhost:3000/api/articles?days=7&limit=3"
 # Combined Filters
 curl "http://localhost:3000/api/articles?location=national&severity=low&discriminationType=general_ai&limit=3"
 # Result: 47 articles (working)
+
+# Metric Card Filters
+curl "http://localhost:3000/api/articles?location=michigan"
+# Result: 1 article (Michigan incidents card)
+
+curl "http://localhost:3000/api/articles?location=national" 
+# Result: 168 articles (National incidents card)
+
+curl "http://localhost:3000/api/articles?severity=high"
+# Result: 14 articles (High severity card)
+
+curl "http://localhost:3000/api/articles?location=national&severity=high"
+# Result: 10 articles (Combined metric filtering)
 ```
 
 ### **RSS Monitoring API Tests**
@@ -151,12 +170,13 @@ Route (app)                                 Size  First Load JS
 ## **Summary**
 
 ✅ **All filtering functionality is now working correctly**
+✅ **Metric card filtering is connected and functional**
 ✅ **Comprehensive RSS processing monitoring is implemented**  
 ✅ **Never-fetched feeds are identified and can be processed**
 ✅ **Real-time progress monitoring is available**
 ✅ **Production deployment is complete**
 
-The application now has robust filtering capabilities and comprehensive RSS processing monitoring, addressing both the filtering issues and RSS processing transparency concerns. The RSS Monitor provides clear visibility into processing status and enables targeted resolution of feed processing issues.
+The application now has robust filtering capabilities and comprehensive RSS processing monitoring, addressing both the filtering issues and RSS processing transparency concerns. The metric cards on the dashboard now properly connect to the filtering system, providing an intuitive way for users to explore specific incident categories. The RSS Monitor provides clear visibility into processing status and enables targeted resolution of feed processing issues.
 
 ---
 *Completed: 2025-01-21*
