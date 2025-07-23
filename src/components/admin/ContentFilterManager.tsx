@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Trash2, Edit, Plus, TestTube, BarChart3, Settings, RefreshCw } from 'lucide-react'
+import { Trash2, Edit, Plus, TestTube, BarChart3, Settings, RefreshCw, Database, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ContentFilter {
@@ -93,6 +93,18 @@ export default function ContentFilterManager() {
   const [testContent, setTestContent] = useState('')
   const [testResult, setTestResult] = useState<any>(null)
   const [testing, setTesting] = useState(false)
+
+  // Retroactive filtering states
+  const [retroactiveAnalysis, setRetroactiveAnalysis] = useState<any>(null)
+  const [retroactiveLoading, setRetroactiveLoading] = useState(false)
+  const [showCleanupConfirmDialog, setShowCleanupConfirmDialog] = useState(false)
+  const [cleanupOptions, setCleanupOptions] = useState({
+    dryRun: true,
+    batchSize: 100,
+    maxArticlesToDelete: undefined as number | undefined,
+    preserveRecentArticles: false,
+    recentArticleThresholdDays: 30,
+  })
 
   useEffect(() => {
     loadData()
@@ -270,6 +282,81 @@ export default function ContentFilterManager() {
     }
   }
 
+  const runRetroactiveAnalysis = async () => {
+    setRetroactiveLoading(true)
+    setRetroactiveAnalysis(null)
+    
+    try {
+      toast.info('Starting analysis of existing articles...')
+      
+      const response = await fetch('/api/admin/content-filters/retroactive-analysis', {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to run retroactive analysis')
+      }
+
+      const result = await response.json()
+      setRetroactiveAnalysis(result.data)
+      toast.success('Retroactive analysis completed')
+    } catch (error) {
+      toast.error('Failed to run analysis')
+    } finally {
+      setRetroactiveLoading(false)
+    }
+  }
+
+  const executeRetroactiveCleanup = async (dryRun: boolean = true) => {
+    setRetroactiveLoading(true)
+    
+    try {
+      const action = dryRun ? 'preview' : 'execute cleanup'
+      toast.info(`Starting ${action}...`)
+      
+      const response = await fetch('/api/admin/content-filters/retroactive-cleanup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...cleanupOptions,
+          dryRun,
+          confirmed: !dryRun,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to execute cleanup')
+      }
+
+      const result = await response.json()
+      
+      // Update the analysis with cleanup results
+      setRetroactiveAnalysis((prev: any) => ({
+        ...prev,
+        cleanupResult: result.data,
+      }))
+      
+      const message = dryRun 
+        ? `Cleanup preview completed: ${result.data.articlesDeleted} articles would be deleted`
+        : `Cleanup executed: ${result.data.articlesDeleted} articles deleted`
+      
+      toast.success(message)
+      
+      if (!dryRun) {
+        // Refresh main data after actual cleanup
+        loadData()
+        setShowCleanupConfirmDialog(false)
+      }
+      
+    } catch (error) {
+      toast.error('Failed to execute cleanup')
+    } finally {
+      setRetroactiveLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -299,6 +386,7 @@ export default function ContentFilterManager() {
           <TabsTrigger value="config">Configuration</TabsTrigger>
           <TabsTrigger value="test">Test Filters</TabsTrigger>
           <TabsTrigger value="statistics">Statistics</TabsTrigger>
+          <TabsTrigger value="retroactive">Retroactive Filtering</TabsTrigger>
         </TabsList>
 
         {/* Filter Management Tab */}
@@ -632,6 +720,234 @@ export default function ContentFilterManager() {
             </>
           )}
         </TabsContent>
+
+        {/* Retroactive Filtering Tab */}
+        <TabsContent value="retroactive" className="space-y-4">
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Warning:</strong> This will apply current filters to all existing articles in the database. 
+              Articles that don&apos;t match any filters will be permanently deleted. Always run analysis first!
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Analysis Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Database className="h-5 w-5 mr-2" />
+                  Database Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Analyze existing articles to see how many would be affected by current filters.
+                  </p>
+                  <Button 
+                    onClick={runRetroactiveAnalysis}
+                    disabled={retroactiveLoading}
+                    className="w-full"
+                  >
+                    {retroactiveLoading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Run Analysis
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {retroactiveAnalysis && (
+                  <div className="space-y-3 mt-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600">
+                          {retroactiveAnalysis.articlesToKeep}
+                        </div>
+                        <div className="text-xs text-green-700">Articles to Keep</div>
+                      </div>
+                      <div className="text-center p-3 bg-red-50 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">
+                          {retroactiveAnalysis.articlesToRemove}
+                        </div>
+                        <div className="text-xs text-red-700">Articles to Remove</div>
+                      </div>
+                    </div>
+
+                    <div className="text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span>Total Articles:</span>
+                        <span className="font-mono">{retroactiveAnalysis.totalArticles}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Filters Matched:</span>
+                        <span className="font-mono">{retroactiveAnalysis.filterStats.matchedFilters.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Storage Reduction:</span>
+                        <span className="font-mono">{retroactiveAnalysis.estimatedSavings.storageReduction}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Cleanup Options */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Cleanup Options</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Preserve Recent Articles</label>
+                    <Switch
+                      checked={cleanupOptions.preserveRecentArticles}
+                      onCheckedChange={(checked) => 
+                        setCleanupOptions(prev => ({ ...prev, preserveRecentArticles: checked }))
+                      }
+                    />
+                  </div>
+
+                  {cleanupOptions.preserveRecentArticles && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Days to Preserve</label>
+                      <Input
+                        type="number"
+                        value={cleanupOptions.recentArticleThresholdDays}
+                        onChange={(e) => 
+                          setCleanupOptions(prev => ({ 
+                            ...prev, 
+                            recentArticleThresholdDays: parseInt(e.target.value) || 30 
+                          }))
+                        }
+                        min="1"
+                        max="365"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Max Articles to Delete</label>
+                    <Input
+                      type="number"
+                      placeholder="No limit"
+                      value={cleanupOptions.maxArticlesToDelete || ''}
+                      onChange={(e) => 
+                        setCleanupOptions(prev => ({ 
+                          ...prev, 
+                          maxArticlesToDelete: e.target.value ? parseInt(e.target.value) : undefined 
+                        }))
+                      }
+                      min="1"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Batch Size</label>
+                    <Input
+                      type="number"
+                      value={cleanupOptions.batchSize}
+                      onChange={(e) => 
+                        setCleanupOptions(prev => ({ 
+                          ...prev, 
+                          batchSize: parseInt(e.target.value) || 100 
+                        }))
+                      }
+                      min="10"
+                      max="1000"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => executeRetroactiveCleanup(true)}
+                    disabled={retroactiveLoading || !retroactiveAnalysis}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {retroactiveLoading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <TestTube className="h-4 w-4 mr-2" />
+                        Preview Cleanup (Dry Run)
+                      </>
+                    )}
+                  </Button>
+
+                  <Button 
+                    onClick={() => setShowCleanupConfirmDialog(true)}
+                    disabled={retroactiveLoading || !retroactiveAnalysis}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    <Database className="h-4 w-4 mr-2" />
+                    Execute Cleanup (Permanent)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Results Section */}
+          {retroactiveAnalysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Sample Articles to Remove</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {retroactiveAnalysis.sampleArticlesToRemove.map((article: any, index: number) => (
+                    <div key={article.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{article.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {article.source} • {new Date(article.publishedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="ml-2 text-xs">
+                        No matches
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+
+                {retroactiveAnalysis.cleanupResult && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium mb-2">Last Cleanup Results</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <div className="font-bold text-red-600">{retroactiveAnalysis.cleanupResult.articlesDeleted}</div>
+                        <div className="text-xs">Deleted</div>
+                      </div>
+                      <div>
+                        <div className="font-bold text-green-600">{retroactiveAnalysis.cleanupResult.articlesPreserved}</div>
+                        <div className="text-xs">Preserved</div>
+                      </div>
+                      <div>
+                        <div className="font-bold">{Math.round(retroactiveAnalysis.cleanupResult.processingTime)}ms</div>
+                        <div className="text-xs">Processing Time</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* Add Filter Dialog */}
@@ -780,6 +1096,90 @@ export default function ContentFilterManager() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cleanup Confirmation Dialog */}
+      <Dialog open={showCleanupConfirmDialog} onOpenChange={setShowCleanupConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center text-red-600">
+              <AlertTriangle className="h-5 w-5 mr-2" />
+              Confirm Permanent Cleanup
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>This action cannot be undone!</strong> You are about to permanently delete articles from the database.
+              </AlertDescription>
+            </Alert>
+
+            {retroactiveAnalysis && (
+              <div className="space-y-3">
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-red-800 mb-2">Articles to be deleted:</h4>
+                  <div className="text-2xl font-bold text-red-600">
+                    {retroactiveAnalysis.articlesToRemove}
+                  </div>
+                  <div className="text-sm text-red-700">
+                    out of {retroactiveAnalysis.totalArticles} total articles
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Filters that will be preserved:</span>
+                    <span className="font-mono">{retroactiveAnalysis.filterStats.matchedFilters.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Estimated storage reduction:</span>
+                    <span className="font-mono">{retroactiveAnalysis.estimatedSavings.storageReduction}</span>
+                  </div>
+                  {cleanupOptions.preserveRecentArticles && (
+                    <div className="flex justify-between">
+                      <span>Recent articles preservation:</span>
+                      <span className="font-mono">{cleanupOptions.recentArticleThresholdDays} days</span>
+                    </div>
+                  )}
+                  {cleanupOptions.maxArticlesToDelete && (
+                    <div className="flex justify-between">
+                      <span>Maximum deletions:</span>
+                      <span className="font-mono">{cleanupOptions.maxArticlesToDelete}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowCleanupConfirmDialog(false)}
+                disabled={retroactiveLoading}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={() => executeRetroactiveCleanup(false)}
+                disabled={retroactiveLoading}
+              >
+                {retroactiveLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4 mr-2" />
+                    Yes, Delete Articles
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
