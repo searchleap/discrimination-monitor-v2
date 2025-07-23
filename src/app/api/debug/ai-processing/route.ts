@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     let providerStatus = 'Unknown'
     try {
       const { aiProviderManager } = await import('@/lib/ai-provider-manager')
-      const providers = await aiProviderManager.listProviders()
+      const providers = await aiProviderManager.getAllProviders()
       providerStatus = `Initialized (${providers.length} providers)`
     } catch (providerError) {
       providerStatus = `Error: ${providerError}`
