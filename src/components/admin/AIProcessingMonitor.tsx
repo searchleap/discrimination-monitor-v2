@@ -505,7 +505,7 @@ export function AIProcessingMonitor() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="queue">Queue Status</TabsTrigger>
-          <TabsTrigger value="worker">Background Worker</TabsTrigger>
+          <TabsTrigger value="worker">Processing</TabsTrigger>
           <TabsTrigger value="activity">Recent Activity</TabsTrigger>
           <TabsTrigger value="controls">Controls</TabsTrigger>
         </TabsList>
@@ -643,67 +643,63 @@ export function AIProcessingMonitor() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Worker Status</CardTitle>
-                <CardDescription>Background worker current status and metrics</CardDescription>
+                <CardTitle>Serverless Processing</CardTitle>
+                <CardDescription>On-demand AI classification in serverless environment</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {workerData ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className={`text-2xl font-bold ${workerData.status.isRunning ? 'text-green-600' : 'text-red-600'}`}>
-                          {workerData.status.isRunning ? 'Running' : 'Stopped'}
-                        </div>
-                        <p className="text-sm text-muted-foreground">Status</p>
-                      </div>
-                      <div>
-                        <div className={`text-2xl font-bold ${getHealthColor(workerData.status.health)}`}>
-                          {workerData.status.health.charAt(0).toUpperCase() + workerData.status.health.slice(1)}
-                        </div>
-                        <p className="text-sm text-muted-foreground">Health</p>
-                      </div>
-                    </div>
-                    
-                    <div className="pt-4 border-t space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Processed Count:</span>
-                        <span className="font-medium">{workerData.status.processedCount}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Error Count:</span>
-                        <span className="font-medium">{workerData.status.errorCount}</span>
-                      </div>
-                      {workerData.status.uptime && (
-                        <div className="flex justify-between">
-                          <span>Uptime:</span>
-                          <span className="font-medium">
-                            {Math.round(workerData.status.uptime / 1000 / 60)} minutes
-                          </span>
-                        </div>
-                      )}
-                      {workerData.status.lastProcessedAt && (
-                        <div className="flex justify-between">
-                          <span>Last Processed:</span>
-                          <span className="font-medium">
-                            {new Date(workerData.status.lastProcessedAt).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      )}
-                      {workerData.status.nextScheduledAt && (
-                        <div className="flex justify-between">
-                          <span>Next Scheduled:</span>
-                          <span className="font-medium">
-                            {new Date(workerData.status.nextScheduledAt).toLocaleTimeString()}
-                          </span>
-                        </div>
-                      )}
+                <div className="p-4 bg-blue-50 rounded-lg border">
+                  <div className="flex items-center">
+                    <Activity className="h-5 w-5 text-blue-600 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">
+                        Serverless Processing Active
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        Articles are processed on-demand using Vercel Functions
+                      </p>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center text-muted-foreground py-8">
-                    Worker data not available
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {data.metrics.completed}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Total Processed</p>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {data.metrics.pending}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Pending</p>
+                    </div>
                   </div>
-                )}
+
+                  <div className="pt-4 border-t space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Success Rate:</span>
+                      <span className="font-medium text-green-600">
+                        {Math.round((data.metrics.successRate || 1) * 100)}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Processing Mode:</span>
+                      <span className="font-medium">On-Demand Batches</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Batch Size:</span>
+                      <span className="font-medium">5 articles</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Average Time:</span>
+                      <span className="font-medium">
+                        {Math.round(data.metrics.averageProcessingTime / 1000)}s per article
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -762,11 +758,11 @@ export function AIProcessingMonitor() {
             </Card>
           </div>
 
-          {/* Worker Controls */}
+          {/* Processing Controls */}
           <Card>
             <CardHeader>
-              <CardTitle>Worker Controls</CardTitle>
-              <CardDescription>Start, stop, and manage the background worker</CardDescription>
+              <CardTitle>Processing Controls</CardTitle>
+              <CardDescription>Trigger AI classification processing for pending articles</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center space-x-4 mb-4">
@@ -790,51 +786,60 @@ export function AIProcessingMonitor() {
                 </Button>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <Button 
-                  onClick={handleStartWorker}
-                  disabled={workerOperating || (workerData?.status.isRunning ?? false)}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                >
-                  {workerOperating ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                  <span>Start Worker</span>
-                </Button>
+              <div className="space-y-4">
+                <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="text-sm text-amber-800">
+                    <strong>Note:</strong> Traditional background workers cannot persist in Vercel&apos;s serverless environment. 
+                    Use &quot;Process Queue Now&quot; for reliable article processing.
+                  </div>
+                </div>
 
-                <Button 
-                  onClick={handleStopWorker}
-                  disabled={workerOperating || !(workerData?.status.isRunning ?? false)}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                >
-                  {workerOperating ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Pause className="h-4 w-4" />
-                  )}
-                  <span>Stop Worker</span>
-                </Button>
+                <div className="flex items-center space-x-4">
+                  <Button 
+                    onClick={handleStartWorker}
+                    disabled={workerOperating || (workerData?.status.isRunning ?? false)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2 opacity-50"
+                  >
+                    {workerOperating ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4" />
+                    )}
+                    <span>Start Worker (Legacy)</span>
+                  </Button>
 
-                <Button 
-                  onClick={handleRestartWorker}
-                  disabled={workerOperating}
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                >
-                  {workerOperating ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span>Restart Worker</span>
-                </Button>
+                  <Button 
+                    onClick={handleStopWorker}
+                    disabled={workerOperating || !(workerData?.status.isRunning ?? false)}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2 opacity-50"
+                  >
+                    {workerOperating ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
+                    <span>Stop Worker (Legacy)</span>
+                  </Button>
+
+                  <Button 
+                    onClick={handleRestartWorker}
+                    disabled={workerOperating}
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2 opacity-50"
+                  >
+                    {workerOperating ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span>Restart Worker (Legacy)</span>
+                  </Button>
+                </div>
               </div>
 
               {workerData?.status.isRunning && (
