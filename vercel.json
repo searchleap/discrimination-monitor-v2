@@ -7,8 +7,21 @@
   "functions": {
     "src/app/api/process/rss/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/process-queue/route.ts": {
+      "maxDuration": 600
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/process-queue",
+      "schedule": "*/15 9-17 * * 1-5"
+    },
+    {
+      "path": "/api/cron/process-queue",
+      "schedule": "0 * * * *"
+    }
+  ],
   "regions": ["iad1"],
   "rewrites": [
     {

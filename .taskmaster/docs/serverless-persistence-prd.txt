@@ -1,0 +1,169 @@
+# Serverless Persistence Simulation for AI Article Processing
+
+## Product Requirements Document
+**Project**: Discrimination Monitor v2 - Serverless Queue Persistence
+**Date**: 2025-01-21
+**Status**: Planning
+
+## Executive Summary
+Implement automated AI article processing that mimics persistent background workers in Vercel's serverless environment, ensuring continuous queue processing without manual intervention.
+
+## Objective
+Create a system that automatically processes pending articles in the processing queue without requiring manual "Process Queue Now" button clicks, while working within Vercel's serverless constraints.
+
+## Current State
+- **Working System**: Manual processing works perfectly (100% success rate on 91 articles)
+- **Architecture**: Serverless batch processor handling 5 articles per execution
+- **Problem**: No automation - requires manual trigger for each batch
+- **Queue Status**: 141 pending articles awaiting processing
+
+## Target Architecture
+Design multiple automation approaches that can work independently or together:
+
+1. **Vercel Cron Jobs** - Scheduled automatic processing
+2. **Function Chaining** - Self-triggering functions that continue until queue empty
+3. **Client-Side Automation** - Browser-based polling and auto-triggering
+4. **Webhook Integration** - RSS feed updates trigger processing
+5. **Database Triggers** - Queue changes trigger processing functions
+
+## Technical Requirements
+
+### Core Functionality
+- **Automatic Queue Processing**: System should detect pending articles and process them
+- **Zero Manual Intervention**: Should work without admin dashboard interaction
+- **Batch Processing**: Maintain 5-article batches for optimal performance
+- **Error Recovery**: Handle failures gracefully and retry
+- **Cost Optimization**: Minimize function executions while maintaining responsiveness
+
+### Performance Requirements
+- **Processing Latency**: Start processing within 5 minutes of articles being queued
+- **Throughput**: Process all pending articles within 1 hour during normal load
+- **Reliability**: 99%+ success rate for automated processing
+- **Resource Efficiency**: Stay within Vercel function limits
+
+### Integration Requirements
+- **Existing API Compatibility**: Don't break current manual processing
+- **Database Consistency**: Maintain ACID properties during automated processing
+- **Monitoring**: Provide visibility into automated processing status
+- **Configuration**: Allow enabling/disabling automation features
+
+## Implementation Approaches
+
+### Approach 1: Vercel Cron Jobs
+**Description**: Use Vercel's built-in cron job functionality for scheduled processing
+**Frequency**: Every 15 minutes during business hours, hourly otherwise
+**Benefits**: Native Vercel integration, reliable scheduling
+**Drawbacks**: Fixed intervals, not responsive to queue changes
+
+### Approach 2: Self-Chaining Functions
+**Description**: Functions that trigger themselves recursively until queue is empty
+**Mechanism**: After processing batch, check for more articles and re-trigger if found
+**Benefits**: Responsive to queue state, processes until complete
+**Drawbacks**: Complex error handling, potential infinite loops
+
+### Approach 3: Client-Side Automation
+**Description**: Admin dashboard automatically triggers processing when queue detected
+**Mechanism**: React hooks poll queue status and trigger processing
+**Benefits**: Real-time responsiveness, user visibility
+**Drawbacks**: Requires admin dashboard to be open
+
+### Approach 4: Webhook Chain Integration
+**Description**: RSS feed updates trigger immediate processing
+**Mechanism**: Feed updates → article ingestion → automatic AI processing
+**Benefits**: Immediate processing of new content
+**Drawbacks**: Dependent on external webhook reliability
+
+### Approach 5: Database-Driven Triggers
+**Description**: Database events trigger serverless functions
+**Mechanism**: Neon database triggers or change streams
+**Benefits**: True event-driven architecture
+**Drawbacks**: Complex setup, potential vendor lock-in
+
+## User Stories
+
+### As an Administrator
+- I want articles to be automatically processed without manual intervention
+- I want to configure automation settings (frequency, batch size, error handling)
+- I want to monitor automation status and performance metrics
+- I want the ability to disable automation and fall back to manual processing
+
+### As a System
+- I want to detect pending articles and process them automatically
+- I want to handle processing failures gracefully with retry logic  
+- I want to optimize processing timing to balance cost and responsiveness
+- I want to maintain processing logs for debugging and analytics
+
+## Acceptance Criteria
+
+### Functional Requirements
+1. **Automated Processing**: System processes pending articles without manual trigger
+2. **Queue Monitoring**: System detects when new articles are added to queue
+3. **Batch Processing**: Maintains current 5-article batch processing logic
+4. **Error Handling**: Failed batches are retried with exponential backoff
+5. **Configuration**: Automation can be enabled/disabled via admin interface
+
+### Non-Functional Requirements
+1. **Performance**: All pending articles processed within 1 hour
+2. **Reliability**: 99%+ automated processing success rate
+3. **Cost Efficiency**: Minimize unnecessary function executions
+4. **Monitoring**: Processing status visible in admin dashboard
+5. **Fallback**: Manual processing remains available if automation fails
+
+## Risk Assessment
+
+### High Risk
+- **Infinite Loops**: Self-chaining functions could create runaway executions
+- **Rate Limits**: Too frequent processing could hit API limits
+- **Cost Overruns**: Excessive automation could increase Vercel costs
+
+### Medium Risk
+- **Processing Delays**: Cron-based approach might delay processing
+- **Error Propagation**: Failures in automated chain could stop all processing
+- **Configuration Complexity**: Multiple automation options could confuse users
+
+### Low Risk
+- **Database Load**: Current processing load is well within database limits
+- **Function Timeouts**: Current processing times are well under limits
+- **UI Complexity**: Automation settings can be hidden in advanced configuration
+
+## Implementation Priority
+
+### Phase 1: Vercel Cron Jobs (Low Risk, High Value)
+- Implement scheduled processing every 15 minutes
+- Add admin configuration for cron frequency
+- Monitor and optimize scheduling intervals
+
+### Phase 2: Self-Chaining Functions (Medium Risk, High Value)  
+- Implement recursive function triggering
+- Add safeguards against infinite loops
+- Implement exponential backoff for errors
+
+### Phase 3: Client-Side Automation (Low Risk, Medium Value)
+- Add auto-polling to admin dashboard
+- Implement smart triggering based on queue state
+- Add user controls for automation settings
+
+### Phase 4: Advanced Integration (High Risk, High Value)
+- Implement webhook-triggered processing
+- Add database change stream monitoring
+- Create unified automation orchestration
+
+## Success Metrics
+- **Automation Rate**: % of articles processed without manual intervention
+- **Processing Latency**: Average time from article queued to processed
+- **Error Rate**: % of automated processing attempts that fail
+- **Cost Efficiency**: Function execution cost per article processed
+- **User Satisfaction**: Admin feedback on automation reliability
+
+## Technical Dependencies
+- Vercel Cron Jobs feature
+- Current serverless AI worker implementation
+- Neon PostgreSQL database
+- Admin dashboard interface
+- OpenAI and Anthropic API integrations
+
+## Resource Requirements
+- Development: 2-3 days for Phase 1, 1 week for all phases
+- Testing: Comprehensive automation testing across all approaches
+- Monitoring: Enhanced logging and metrics collection
+- Documentation: Updated admin guide with automation features
