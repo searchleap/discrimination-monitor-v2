@@ -317,6 +317,33 @@ export function AIProcessingMonitor() {
     }
   }
 
+  // Process queue now (serverless-friendly)
+  const handleProcessQueueNow = async () => {
+    setWorkerOperating(true)
+    try {
+      const response = await fetch('/api/ai-queue/process', {
+        method: 'POST'
+      })
+
+      const result = await response.json()
+      
+      if (result.success) {
+        await fetchData()
+        // Show success message with summary
+        const summary = result.summary
+        if (summary) {
+          console.log(`✅ Processed ${summary.totalSuccessful} articles successfully`)
+        }
+      } else {
+        setError(result.error || 'Failed to process queue')
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to process queue')
+    } finally {
+      setWorkerOperating(false)
+    }
+  }
+
   const getHealthColor = (health: string) => {
     switch (health) {
       case 'healthy': return 'text-green-600 bg-green-50'
@@ -400,15 +427,18 @@ export function AIProcessingMonitor() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Background Worker</CardTitle>
+            <CardTitle className="text-sm font-medium">AI Processing</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${workerData?.status.isRunning ? 'text-green-600' : 'text-red-600'}`}>
-              {workerData?.status.isRunning ? 'Running' : 'Stopped'}
+            <div className={`text-2xl font-bold ${data.metrics.pending === 0 ? 'text-green-600' : 'text-blue-600'}`}>
+              {data.metrics.pending === 0 ? 'Complete' : 'Ready'}
             </div>
             <p className="text-xs text-muted-foreground">
-              {workerData?.status.health && `Health: ${workerData.status.health}`}
+              {data.metrics.pending === 0 
+                ? 'All articles processed' 
+                : `${data.metrics.pending} items awaiting processing`
+              }
             </p>
           </CardContent>
         </Card>
@@ -739,10 +769,33 @@ export function AIProcessingMonitor() {
               <CardDescription>Start, stop, and manage the background worker</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="flex items-center space-x-4 mb-4">
+                <Button 
+                  onClick={handleProcessQueueNow}
+                  disabled={workerOperating || data.metrics.pending === 0}
+                  className="flex items-center space-x-2"
+                  size="lg"
+                >
+                  {workerOperating ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4" />
+                  )}
+                  <span>Process Queue Now</span>
+                  {data.metrics.pending > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {data.metrics.pending}
+                    </Badge>
+                  )}
+                </Button>
+              </div>
+
               <div className="flex items-center space-x-4">
                 <Button 
                   onClick={handleStartWorker}
                   disabled={workerOperating || (workerData?.status.isRunning ?? false)}
+                  variant="outline"
+                  size="sm"
                   className="flex items-center space-x-2"
                 >
                   {workerOperating ? (
@@ -757,6 +810,7 @@ export function AIProcessingMonitor() {
                   onClick={handleStopWorker}
                   disabled={workerOperating || !(workerData?.status.isRunning ?? false)}
                   variant="outline"
+                  size="sm"
                   className="flex items-center space-x-2"
                 >
                   {workerOperating ? (
@@ -770,7 +824,8 @@ export function AIProcessingMonitor() {
                 <Button 
                   onClick={handleRestartWorker}
                   disabled={workerOperating}
-                  variant="secondary"
+                  variant="outline"
+                  size="sm"
                   className="flex items-center space-x-2"
                 >
                   {workerOperating ? (
@@ -798,16 +853,32 @@ export function AIProcessingMonitor() {
                 </div>
               )}
 
-              {!workerData?.status.isRunning && (
-                <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+              {!workerData?.status.isRunning && data.metrics.pending > 0 && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <div className="flex items-center">
-                    <AlertCircle className="h-5 w-5 text-yellow-600 mr-2" />
+                    <AlertCircle className="h-5 w-5 text-blue-600 mr-2" />
                     <div>
-                      <p className="text-sm font-medium text-yellow-800">
-                        Background worker is stopped
+                      <p className="text-sm font-medium text-blue-800">
+                        Ready to process {data.metrics.pending} pending articles
                       </p>
-                      <p className="text-xs text-yellow-600">
-                        Queue processing requires manual triggers or worker restart
+                      <p className="text-xs text-blue-600">
+                        Click "Process Queue Now" to start AI classification
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {data.metrics.pending === 0 && (
+                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
+                    <div>
+                      <p className="text-sm font-medium text-green-800">
+                        Queue is empty - all articles processed
+                      </p>
+                      <p className="text-xs text-green-600">
+                        New articles will be automatically added when RSS feeds are processed
                       </p>
                     </div>
                   </div>
