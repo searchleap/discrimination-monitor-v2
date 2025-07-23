@@ -13,7 +13,22 @@ export async function POST(request: NextRequest) {
     const feedIds = body.feedIds || null
     const maxFeeds = body.maxFeeds || 3 // Conservative limit to prevent timeouts
     
+    // Log processing start
+    await prisma.processingLog.create({
+      data: {
+        type: 'RSS_PROCESSING_START',
+        status: 'IN_PROGRESS',
+        message: `Starting RSS processing for ${feedIds ? feedIds.length : 'all'} feeds`,
+        details: { 
+          feedIds, 
+          maxFeeds,
+          requestedAt: new Date().toISOString()
+        } as any
+      }
+    })
+
     const results: any = {}
+    const processedFeeds: string[] = []
     
     if (feedIds && Array.isArray(feedIds)) {
       // Process specific feeds
@@ -21,9 +36,33 @@ export async function POST(request: NextRequest) {
         // Check timeout before processing each feed
         if (Date.now() - startTime > timeoutMs) {
           console.warn(`⏰ Processing timeout reached, stopping after ${Object.keys(results).length} feeds`)
+          await prisma.processingLog.create({
+            data: {
+              type: 'RSS_PROCESSING_TIMEOUT',
+              status: 'WARNING',
+              message: `Processing timeout after ${Object.keys(results).length} feeds`,
+              processingTime: Date.now() - startTime
+            }
+          })
           break
         }
-        results[feedId] = await rssProcessor.processFeed(feedId)
+        
+        console.log(`📡 Processing feed ${feedId}...`)
+        const feedResult = await rssProcessor.processFeed(feedId)
+        results[feedId] = feedResult
+        processedFeeds.push(feedId)
+        
+        // Log individual feed processing
+        await prisma.processingLog.create({
+          data: {
+            type: 'RSS_FEED_PROCESSED',
+            status: feedResult.success ? 'SUCCESS' : 'ERROR',
+            message: `Feed ${feedId}: ${feedResult.newArticles} new articles`,
+            details: feedResult as any, // Cast to any for JSON storage
+            feedId: feedId,
+            processingTime: null
+          }
+        })
       }
     } else {
       // Process all feeds (with limit for manual processing)
@@ -33,16 +72,45 @@ export async function POST(request: NextRequest) {
           status: { not: 'MAINTENANCE' }
         },
         take: maxFeeds,
-        orderBy: { priority: 'asc' }
+        orderBy: [
+          { lastFetched: { sort: 'asc', nulls: 'first' } }, // Process never-fetched feeds first
+          { priority: 'asc' }
+        ]
       })
+      
+      console.log(`📋 Found ${activeFeeds.length} active feeds to process`)
       
       for (const feed of activeFeeds) {
         // Check timeout before processing each feed
         if (Date.now() - startTime > timeoutMs) {
           console.warn(`⏰ Processing timeout reached, stopping after ${Object.keys(results).length} feeds`)
+          await prisma.processingLog.create({
+            data: {
+              type: 'RSS_PROCESSING_TIMEOUT',
+              status: 'WARNING',
+              message: `Processing timeout after ${Object.keys(results).length} feeds`,
+              processingTime: Date.now() - startTime
+            }
+          })
           break
         }
-        results[feed.id] = await rssProcessor.processFeed(feed.id)
+        
+        console.log(`📡 Processing feed: ${feed.name}`)
+        const feedResult = await rssProcessor.processFeed(feed.id)
+        results[feed.id] = feedResult
+        processedFeeds.push(feed.id)
+        
+        // Log individual feed processing
+        await prisma.processingLog.create({
+          data: {
+            type: 'RSS_FEED_PROCESSED',
+            status: feedResult.success ? 'SUCCESS' : 'ERROR', 
+            message: `${feed.name}: ${feedResult.newArticles} new articles`,
+            details: feedResult as any, // Cast to any for JSON storage
+            feedId: feed.id,
+            processingTime: null
+          }
+        })
       }
     }
     
@@ -50,9 +118,29 @@ export async function POST(request: NextRequest) {
     const totalFeeds = Object.keys(results).length
     const successfulFeeds = Object.values(results).filter((r: any) => r.success).length
     const failedFeeds = totalFeeds - successfulFeeds
-    const totalNewArticles = Object.values(results).reduce((sum: number, r: any) => sum + r.newArticles, 0)
-    const totalProcessed = Object.values(results).reduce((sum: number, r: any) => sum + r.articlesProcessed, 0)
-    const totalErrors = Object.values(results).reduce((sum: number, r: any) => sum + r.errors.length, 0)
+    const totalNewArticles = Object.values(results).reduce((sum: number, r: any) => sum + (r.newArticles || 0), 0)
+    const totalProcessed = Object.values(results).reduce((sum: number, r: any) => sum + (r.articlesProcessed || 0), 0)
+    const totalErrors = Object.values(results).reduce((sum: number, r: any) => sum + (r.errors?.length || 0), 0)
+    const processingTime = Date.now() - startTime
+    
+    // Log processing completion
+    await prisma.processingLog.create({
+      data: {
+        type: 'RSS_PROCESSING_COMPLETE',
+        status: totalErrors > 0 ? 'WARNING' : 'SUCCESS',
+        message: `RSS processing completed: ${totalNewArticles} new articles from ${successfulFeeds}/${totalFeeds} feeds`,
+        details: {
+          totalFeeds,
+          successfulFeeds,
+          failedFeeds,
+          totalNewArticles,
+          totalProcessed,
+          totalErrors,
+          processedFeeds
+        } as any,
+        processingTime
+      }
+    })
     
     console.log(`✅ RSS processing completed: ${totalNewArticles} new articles`)
     
@@ -64,16 +152,35 @@ export async function POST(request: NextRequest) {
         failedFeeds,
         totalNewArticles,
         totalProcessed,
-        totalErrors
+        totalErrors,
+        processingTime
       },
-      results
+      results,
+      processedFeeds
     })
   } catch (error) {
+    const processingTime = Date.now() - startTime
+    
+    // Log processing error
+    await prisma.processingLog.create({
+      data: {
+        type: 'RSS_PROCESSING_ERROR',
+        status: 'ERROR',
+        message: `RSS processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        details: { 
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : null
+        } as any,
+        processingTime
+      }
+    }).catch(console.error) // Don't fail if logging fails
+    
     console.error('❌ RSS processing failed:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        processingTime
       },
       { status: 500 }
     )

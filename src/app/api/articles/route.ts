@@ -19,19 +19,42 @@ export async function GET(request: NextRequest) {
     const where: any = {}
 
     if (location) {
-      where.location = location
+      // Map frontend location values to database enum values
+      const locationMap: { [key: string]: string } = {
+        'michigan': 'MICHIGAN',
+        'national': 'NATIONAL', 
+        'international': 'INTERNATIONAL'
+      }
+      where.location = locationMap[location.toLowerCase()] || location.toUpperCase()
     }
 
     if (discriminationType) {
-      where.discriminationType = discriminationType
+      // Map frontend discrimination type values to database enum values
+      const typeMap: { [key: string]: string } = {
+        'racial': 'RACIAL',
+        'religious': 'RELIGIOUS',
+        'disability': 'DISABILITY', 
+        'general_ai': 'GENERAL_AI',
+        'multiple': 'MULTIPLE'
+      }
+      where.discriminationType = typeMap[discriminationType.toLowerCase()] || discriminationType.toUpperCase()
     }
 
     if (severity) {
-      where.severity = severity
+      // Map frontend severity values to database enum values
+      const severityMap: { [key: string]: string } = {
+        'low': 'LOW',
+        'medium': 'MEDIUM',
+        'high': 'HIGH'
+      }
+      where.severity = severityMap[severity.toLowerCase()] || severity.toUpperCase()
     }
 
     if (source) {
-      where.source = source
+      where.source = {
+        contains: source,
+        mode: 'insensitive'
+      }
     }
 
     if (days) {

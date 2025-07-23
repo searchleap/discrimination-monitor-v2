@@ -114,9 +114,9 @@ export function useArticleFilters() {
     const params = new URLSearchParams()
     
     if (filters.search) params.append('search', filters.search)
-    if (filters.location) params.append('location', filters.location.toUpperCase())
-    if (filters.discriminationType) params.append('discriminationType', filters.discriminationType.toUpperCase())
-    if (filters.severity) params.append('severity', filters.severity.toUpperCase())
+    if (filters.location) params.append('location', filters.location) // Send as-is, API will handle mapping
+    if (filters.discriminationType) params.append('discriminationType', filters.discriminationType) // Send as-is, API will handle mapping
+    if (filters.severity) params.append('severity', filters.severity) // Send as-is, API will handle mapping
     if (filters.dateRange) params.append('days', filters.dateRange)
     if (filters.source) params.append('source', filters.source)
     

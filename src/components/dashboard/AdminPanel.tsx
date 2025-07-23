@@ -25,6 +25,7 @@ import {
   Server,
   Globe
 } from 'lucide-react'
+import { RSSMonitor } from '@/components/admin/RSSMonitor'
 
 interface RSSFeed {
   id: string
@@ -98,6 +99,7 @@ const StatusIndicator = ({
 }
 
 export function AdminPanel() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'feeds' | 'monitor'>('overview')
   const [feeds, setFeeds] = useState<RSSFeed[]>([])
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -322,8 +324,50 @@ export function AdminPanel() {
 
   return (
     <div className="space-y-6">
-      {/* System Status */}
-      <Card>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'overview'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Activity className="h-4 w-4 inline mr-2" />
+            System Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('feeds')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'feeds'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Rss className="h-4 w-4 inline mr-2" />
+            RSS Feeds
+          </button>
+          <button
+            onClick={() => setActiveTab('monitor')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'monitor'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Settings className="h-4 w-4 inline mr-2" />
+            RSS Monitor
+          </button>
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <>
+          {/* System Status */}
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
@@ -380,8 +424,70 @@ export function AdminPanel() {
         </CardContent>
       </Card>
 
-      {/* RSS Feed Management */}
-      <Card>
+      {/* System Configuration */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              System Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Processing Interval (minutes)</label>
+              <Input type="number" defaultValue={30} className="mt-1" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">AI Classification Threshold</label>
+              <Input type="number" step="0.1" min="0" max="1" defaultValue={0.7} className="mt-1" />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Auto-classification</label>
+              <Switch defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Email notifications</label>
+              <Switch />
+            </div>
+            <Button className="w-full">Save Configuration</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Security & Maintenance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button variant="outline" className="w-full justify-start">
+              <Database className="h-4 w-4 mr-2" />
+              Backup Database
+            </Button>
+            <Button variant="outline" className="w-full justify-start">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Clear Cache
+            </Button>
+            <Button variant="outline" className="w-full justify-start">
+              <Globe className="h-4 w-4 mr-2" />
+              Test API Connections
+            </Button>
+            <Button variant="outline" className="w-full justify-start">
+              <Users className="h-4 w-4 mr-2" />
+              User Management
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+      </>
+      )}
+
+      {activeTab === 'feeds' && (
+        <>
+          {/* RSS Feed Management */}
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -563,63 +669,12 @@ export function AdminPanel() {
         </CardContent>
       </Card>
 
-      {/* System Configuration */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              System Configuration
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Processing Interval (minutes)</label>
-              <Input type="number" defaultValue={30} className="mt-1" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">AI Classification Threshold</label>
-              <Input type="number" step="0.1" min="0" max="1" defaultValue={0.7} className="mt-1" />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Auto-classification</label>
-              <Switch defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Email notifications</label>
-              <Switch />
-            </div>
-            <Button className="w-full">Save Configuration</Button>
-          </CardContent>
-        </Card>
+        </>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              Security & Maintenance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button variant="outline" className="w-full justify-start">
-              <Database className="h-4 w-4 mr-2" />
-              Backup Database
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Clear Cache
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Globe className="h-4 w-4 mr-2" />
-              Test API Connections
-            </Button>
-            <Button variant="outline" className="w-full justify-start">
-              <Users className="h-4 w-4 mr-2" />
-              User Management
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      {activeTab === 'monitor' && (
+        <RSSMonitor />
+      )}
     </div>
   )
 }

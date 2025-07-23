@@ -35,7 +35,7 @@ export function FiltersSection() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Search */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
@@ -121,6 +121,20 @@ export function FiltersSection() {
                 <option value="90">Last 90 days</option>
                 <option value="180">Last 6 months</option>
               </select>
+            </div>
+
+            {/* Source Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">
+                Source
+              </label>
+              <input
+                type="text"
+                placeholder="Filter by source..."
+                value={filters.source}
+                onChange={(e) => updateFilter('source', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
             </div>
           </div>
 
