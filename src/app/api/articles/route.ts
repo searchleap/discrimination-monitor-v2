@@ -87,26 +87,26 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // Get articles from database
-    const articles = await prisma.article.findMany({
-      where,
-      orderBy: {
-        [sortBy]: sortOrder
-      },
-      skip: offset,
-      take: limit,
-      include: {
-        feed: {
-          select: {
-            name: true,
-            category: true
+    // Get articles and total count in parallel for better performance
+    const [articles, total] = await Promise.all([
+      prisma.article.findMany({
+        where,
+        orderBy: {
+          [sortBy]: sortOrder
+        },
+        skip: offset,
+        take: limit,
+        include: {
+          feed: {
+            select: {
+              name: true,
+              category: true
+            }
           }
         }
-      }
-    })
-
-    // Get total count for pagination
-    const total = await prisma.article.count({ where })
+      }),
+      prisma.article.count({ where })
+    ])
 
     return NextResponse.json({
       success: true,
