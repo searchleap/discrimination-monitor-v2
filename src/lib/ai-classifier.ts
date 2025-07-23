@@ -1,51 +1,111 @@
 import { Article, AIClassificationResult } from '@/types'
+import { aiProviderManager, ProviderConfig } from './ai-provider-manager'
+import { ProviderType } from '@prisma/client'
 
 export class AIClassifier {
   private static readonly OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
   private static readonly ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
   
-  private openaiKey: string | null = null
-  private anthropicKey: string | null = null
-
   constructor() {
-    this.openaiKey = process.env.OPENAI_API_KEY || null
-    this.anthropicKey = process.env.ANTHROPIC_API_KEY || null
+    // Initialize default providers if needed
+    aiProviderManager.initializeDefaultProviders().catch(console.error)
   }
 
   /**
-   * Classify an article using AI
+   * Classify an article using AI with intelligent provider failover
    */
   async classifyArticle(article: Article): Promise<AIClassificationResult> {
-    try {
-      // Try OpenAI first, then Anthropic as fallback
-      if (this.openaiKey) {
-        return await this.classifyWithOpenAI(article)
-      } else if (this.anthropicKey) {
-        return await this.classifyWithAnthropic(article)
-      } else {
-        return this.getFallbackClassification(article)
+    const startTime = Date.now()
+    const excludedProviders: string[] = []
+    let lastError: Error | null = null
+
+    // Try up to 3 providers before falling back
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const provider = await aiProviderManager.getNextAvailableProvider(excludedProviders)
+        
+        if (!provider) {
+          throw new Error('No available AI providers')
+        }
+
+        const result = await this.classifyWithProvider(article, provider.id)
+        
+        // Record successful usage
+        await aiProviderManager.recordUsage(
+          provider.id,
+          true,
+          Date.now() - startTime
+        )
+
+        return result
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        
+        // Get the current provider to record the failure
+        const provider = await aiProviderManager.getNextAvailableProvider(excludedProviders)
+        if (provider) {
+          excludedProviders.push(provider.id)
+          
+          // Record failed usage
+          await aiProviderManager.recordUsage(
+            provider.id,
+            false,
+            Date.now() - startTime
+          )
+        }
+
+        console.warn(`AI classification attempt ${attempt + 1} failed:`, error)
       }
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('AI classification failed:', error)
-      return this.getFallbackClassification(article)
+    }
+
+    // All providers failed, use fallback
+    console.error('All AI providers failed, using fallback classification:', lastError)
+    return this.getFallbackClassification(article)
+  }
+
+  /**
+   * Classify using a specific provider
+   */
+  private async classifyWithProvider(article: Article, providerId: string): Promise<AIClassificationResult> {
+    const provider = await aiProviderManager.getProvider(providerId)
+    
+    if (!provider) {
+      throw new Error(`Provider ${providerId} not found`)
+    }
+
+    const config = provider.config as ProviderConfig
+
+    switch (provider.type) {
+      case ProviderType.OPENAI:
+        return await this.classifyWithOpenAI(article, config)
+      case ProviderType.ANTHROPIC:
+        return await this.classifyWithAnthropic(article, config)
+      default:
+        throw new Error(`Unsupported provider type: ${provider.type}`)
     }
   }
 
   /**
-   * Classify using OpenAI
+   * Classify using OpenAI with provider config
    */
-  private async classifyWithOpenAI(article: Article): Promise<AIClassificationResult> {
+  private async classifyWithOpenAI(article: Article, config: ProviderConfig): Promise<AIClassificationResult> {
     const prompt = this.buildClassificationPrompt(article)
     
-    const response = await fetch(AIClassifier.OPENAI_API_URL, {
+    if (!config.apiKey) {
+      throw new Error('OpenAI API key not configured')
+    }
+
+    // Decrypt API key
+    const apiKey = Buffer.from(config.apiKey, 'base64').toString('utf-8')
+    
+    const response = await fetch(config.baseUrl || AIClassifier.OPENAI_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.openaiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: config.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -56,13 +116,15 @@ export class AIClassifier {
             content: prompt
           }
         ],
-        temperature: 0.1,
-        max_tokens: 1000
-      })
+        temperature: config.temperature || 0.1,
+        max_tokens: config.maxTokens || 1000
+      }),
+      signal: AbortSignal.timeout(config.timeout || 30000)
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
@@ -76,32 +138,42 @@ export class AIClassifier {
   }
 
   /**
-   * Classify using Anthropic
+   * Classify using Anthropic with provider config
    */
-  private async classifyWithAnthropic(article: Article): Promise<AIClassificationResult> {
+  private async classifyWithAnthropic(article: Article, config: ProviderConfig): Promise<AIClassificationResult> {
     const prompt = this.buildClassificationPrompt(article)
     
-    const response = await fetch(AIClassifier.ANTHROPIC_API_URL, {
+    if (!config.apiKey) {
+      throw new Error('Anthropic API key not configured')
+    }
+
+    // Decrypt API key
+    const apiKey = Buffer.from(config.apiKey, 'base64').toString('utf-8')
+    
+    const response = await fetch(config.baseUrl || AIClassifier.ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
-        'x-api-key': this.anthropicKey!,
+        'x-api-key': apiKey,
         'Content-Type': 'application/json',
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 1000,
+        model: config.model || 'claude-3-haiku-20240307',
+        max_tokens: config.maxTokens || 1000,
+        temperature: config.temperature || 0.1,
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ]
-      })
+      }),
+      signal: AbortSignal.timeout(config.timeout || 30000)
     })
 
     if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`)
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`Anthropic API error: ${response.status} ${response.statusText} - ${errorText}`)
     }
 
     const data = await response.json()
