@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -76,11 +76,7 @@ export function AnalyticsDashboard() {
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('30')
 
-  useEffect(() => {
-    fetchAnalytics()
-  }, [timeRange])
-
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch(`/api/analytics?days=${timeRange}`)
@@ -89,11 +85,15 @@ export function AnalyticsDashboard() {
         setAnalytics(data)
       }
     } catch (error) {
-      console.error('Failed to fetch analytics:', error)
+
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeRange])
+
+  useEffect(() => {
+    fetchAnalytics()
+  }, [fetchAnalytics])
 
   if (loading) {
     return (

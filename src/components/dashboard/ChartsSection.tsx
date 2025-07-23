@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
@@ -63,11 +63,7 @@ export function ChartsSection() {
   const [timeRange, setTimeRange] = useState('30')
   const [location, setLocation] = useState('ALL')
 
-  useEffect(() => {
-    fetchChartData()
-  }, [timeRange, location])
-
-  const fetchChartData = async () => {
+  const fetchChartData = useCallback(async () => {
     try {
       setLoading(true)
       const response = await fetch(`/api/analytics/charts?days=${timeRange}&location=${location}`)
@@ -76,14 +72,18 @@ export function ChartsSection() {
       if (result.success) {
         setData(result.data)
       } else {
-        console.error('Failed to fetch chart data:', result.error)
+
       }
     } catch (error) {
-      console.error('Error fetching chart data:', error)
+
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeRange, location])
+
+  useEffect(() => {
+    fetchChartData()
+  }, [fetchChartData])
 
   const TrendIcon = ({ direction, value }: { direction: string, value: number }) => {
     if (direction === 'up') return <TrendingUp className="h-4 w-4 text-red-500" />

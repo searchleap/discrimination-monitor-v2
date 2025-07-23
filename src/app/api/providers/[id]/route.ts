@@ -3,10 +3,11 @@ import { aiProviderManager } from '@/lib/ai-provider-manager'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const provider = await aiProviderManager.getProvider(params.id)
+    const { id } = await params
+    const provider = await aiProviderManager.getProvider(id)
     
     if (!provider) {
       return NextResponse.json(
@@ -18,8 +19,8 @@ export async function GET(
       )
     }
 
-    const health = await aiProviderManager.checkProviderHealth(params.id)
-    const usage = await aiProviderManager.getUsageStats(params.id)
+    const health = await aiProviderManager.checkProviderHealth(id)
+    const usage = await aiProviderManager.getUsageStats(id)
 
     // Don't expose encrypted API keys
     const safeConfig = { ...provider.config as any }
@@ -50,12 +51,13 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const body = await request.json()
     
-    const provider = await aiProviderManager.updateProvider(params.id, body)
+    const provider = await aiProviderManager.updateProvider(id, body)
 
     // Don't expose encrypted API keys in response
     const safeConfig = { ...provider.config as any }
@@ -84,10 +86,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await aiProviderManager.deleteProvider(params.id)
+    const { id } = await params
+    await aiProviderManager.deleteProvider(id)
 
     return NextResponse.json({
       success: true,

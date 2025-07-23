@@ -96,7 +96,7 @@ export function RSSMonitor() {
         setStatus(data.data)
       }
     } catch (error) {
-      console.error('Failed to fetch RSS status:', error)
+
     } finally {
       setLoading(false)
     }
@@ -119,7 +119,7 @@ export function RSSMonitor() {
       // Refresh status after processing
       setTimeout(fetchStatus, 1000)
     } catch (error) {
-      console.error('Processing failed:', error)
+
     } finally {
       setProcessing(false)
     }

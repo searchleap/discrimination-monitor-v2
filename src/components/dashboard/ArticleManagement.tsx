@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,12 +38,7 @@ export function ArticleManagement() {
   
   const { filters, updateFilter, getAPIParams } = useArticleFilters()
 
-  useEffect(() => {
-    fetchArticles()
-    fetchFeeds()
-  }, [filters])
-
-  const fetchArticles = async () => {
+  const fetchArticles = useCallback(async () => {
     setLoading(true)
     try {
       const apiParams = getAPIParams()
@@ -61,7 +56,12 @@ export function ArticleManagement() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [getAPIParams])
+
+  useEffect(() => {
+    fetchArticles()
+    fetchFeeds()
+  }, [fetchArticles, filters])
 
   const fetchFeeds = async () => {
     try {

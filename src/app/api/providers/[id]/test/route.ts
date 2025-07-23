@@ -3,10 +3,11 @@ import { aiProviderManager } from '@/lib/ai-provider-manager'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const provider = await aiProviderManager.getProvider(params.id)
+    const { id } = await params
+    const provider = await aiProviderManager.getProvider(id)
     
     if (!provider) {
       return NextResponse.json(
@@ -19,12 +20,12 @@ export async function POST(
     }
 
     const startTime = Date.now()
-    const health = await aiProviderManager.checkProviderHealth(params.id)
+    const health = await aiProviderManager.checkProviderHealth(id)
     const testTime = Date.now() - startTime
 
     // Record the test as usage
     await aiProviderManager.recordUsage(
-      params.id,
+      id,
       health.status === 'healthy',
       testTime
     )
@@ -32,7 +33,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       data: {
-        providerId: params.id,
+        providerId: id,
         providerName: provider.name,
         providerType: provider.type,
         testResult: {

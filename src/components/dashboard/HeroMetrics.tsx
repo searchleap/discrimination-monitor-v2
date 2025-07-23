@@ -198,7 +198,7 @@ export function HeroMetrics() {
           throw new Error(result.error || 'Failed to fetch dashboard data')
         }
       } catch (err) {
-        console.error('Error fetching dashboard data:', err)
+
         setError(err instanceof Error ? err.message : 'Unknown error occurred')
       } finally {
         setLoading(false)

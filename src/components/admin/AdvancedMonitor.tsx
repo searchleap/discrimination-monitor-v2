@@ -99,7 +99,7 @@ export default function AdvancedMonitor() {
       }
 
     } catch (error) {
-      console.error('Failed to fetch advanced monitoring data:', error)
+
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -128,7 +128,7 @@ export default function AdvancedMonitor() {
         await fetchData() // Refresh data
       }
     } catch (error) {
-      console.error('Failed to acknowledge alert:', error)
+
     }
   }
 
@@ -145,7 +145,7 @@ export default function AdvancedMonitor() {
         alert(result.message)
       }
     } catch (error) {
-      console.error('Failed to test alert:', error)
+
     }
   }
 

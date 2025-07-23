@@ -119,7 +119,7 @@ export default function ProviderManagement() {
         setProviders(data.data)
       }
     } catch (error) {
-      console.error('Failed to fetch providers:', error)
+
     } finally {
       setLoading(false)
     }
@@ -174,7 +174,7 @@ export default function ProviderManagement() {
         await fetchProviders()
       }
     } catch (error) {
-      console.error('Failed to delete provider:', error)
+
     }
   }
 
@@ -213,7 +213,7 @@ export default function ProviderManagement() {
         await fetchProviders()
       }
     } catch (error) {
-      console.error('Failed to toggle provider:', error)
+
     }
   }
 

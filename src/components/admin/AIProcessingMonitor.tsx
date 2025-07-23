@@ -148,7 +148,7 @@ export function AIProcessingMonitor() {
       
       setError(null)
     } catch (error) {
-      console.error('Failed to fetch AI processing data:', error)
+
       setError(error instanceof Error ? error.message : 'Failed to fetch data')
     } finally {
       setLoading(false)
@@ -179,7 +179,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData() // Refresh data
-        console.log('Queue processing completed:', result.summary)
+
       } else {
         setError(result.error || 'Processing failed')
       }
@@ -202,7 +202,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData()
-        console.log('Retry completed:', result.summary)
+
       } else {
         setError(result.error || 'Retry failed')
       }
@@ -227,7 +227,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData()
-        console.log('Bulk add completed:', result.summary)
+
       } else {
         setError(result.error || 'Bulk add failed')
       }
@@ -250,7 +250,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData()
-        console.log('Worker started:', result.message)
+
       } else {
         setError(result.error || 'Failed to start worker')
       }
@@ -273,7 +273,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData()
-        console.log('Worker stopped:', result.message)
+
       } else {
         setError(result.error || 'Failed to stop worker')
       }
@@ -296,7 +296,7 @@ export function AIProcessingMonitor() {
       
       if (result.success) {
         await fetchData()
-        console.log('Worker restarted:', result.message)
+
       } else {
         setError(result.error || 'Failed to restart worker')
       }
