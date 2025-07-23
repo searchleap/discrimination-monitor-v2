@@ -332,7 +332,7 @@ export function AIProcessingMonitor() {
         // Show success message with summary
         const summary = result.summary
         if (summary) {
-          console.log(`✅ Processed ${summary.totalSuccessful} articles successfully`)
+          // Successfully processed articles - data will be reflected in the UI
         }
       } else {
         setError(result.error || 'Failed to process queue')
@@ -862,7 +862,7 @@ export function AIProcessingMonitor() {
                         Ready to process {data.metrics.pending} pending articles
                       </p>
                       <p className="text-xs text-blue-600">
-                        Click "Process Queue Now" to start AI classification
+                        Click &quot;Process Queue Now&quot; to start AI classification
                       </p>
                     </div>
                   </div>
