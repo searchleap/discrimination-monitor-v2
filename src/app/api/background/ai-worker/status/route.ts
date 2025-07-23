@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aiProcessingWorker } from '@/lib/ai-worker'
+import { serverlessAIWorker } from '@/lib/serverless-ai-worker'
 
 export async function GET(request: NextRequest) {
   try {
     const [status, metrics] = await Promise.all([
-      aiProcessingWorker.getStatus(),
-      aiProcessingWorker.getMetrics()
+      serverlessAIWorker.getStatus(),
+      serverlessAIWorker.getMetrics()
     ])
 
     return NextResponse.json({
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('Error fetching AI worker status:', error)
+    console.error('Error fetching serverless AI worker status:', error)
     return NextResponse.json(
       { 
         success: false, 

@@ -3,15 +3,7 @@ import { serverlessAIWorker } from '@/lib/serverless-ai-worker'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🚀 Starting serverless AI processing worker via API...')
-    
-    const body = await request.json().catch(() => ({}))
-    const { config } = body
-    
-    // Update configuration if provided
-    if (config) {
-      serverlessAIWorker.updateConfig(config)
-    }
+    console.log('🤖 Triggering AI queue processing...')
     
     // Check if worker can start
     if (!serverlessAIWorker.canStartProcessing()) {
@@ -20,7 +12,7 @@ export async function POST(request: NextRequest) {
         success: false,
         message: status.isProcessing 
           ? 'Worker is already processing' 
-          : 'Worker is disabled or cannot start',
+          : 'Worker is disabled',
         data: { status }
       }, { status: 409 })
     }
@@ -28,27 +20,36 @@ export async function POST(request: NextRequest) {
     // Start processing
     const result = await serverlessAIWorker.startProcessing()
     
-    // Get updated status
-    const status = await serverlessAIWorker.getStatus()
+    // Get final status and metrics
+    const [status, metrics] = await Promise.all([
+      serverlessAIWorker.getStatus(),
+      serverlessAIWorker.getMetrics()
+    ])
     
     return NextResponse.json({
       success: result.success,
       message: result.message,
       data: {
         status,
+        metrics,
         results: result.results,
         summary: result.summary,
-        startedAt: new Date().toISOString()
+        completedAt: new Date().toISOString()
       }
     })
   } catch (error) {
-    console.error('❌ Failed to start serverless AI worker:', error)
+    console.error('❌ Failed to process AI queue:', error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to start worker'
+        error: error instanceof Error ? error.message : 'Failed to process queue'
       },
       { status: 500 }
     )
   }
+}
+
+// Allow GET for easy triggering (useful for webhooks/cron)
+export async function GET(request: NextRequest) {
+  return POST(request)
 }

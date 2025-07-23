@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aiProcessingWorker } from '@/lib/ai-worker'
+import { serverlessAIWorker } from '@/lib/serverless-ai-worker'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🛑 Stopping AI processing worker via API...')
+    console.log('🛑 Force stopping serverless AI processing worker via API...')
     
-    // Stop the worker
-    await aiProcessingWorker.stop()
+    // Force stop the worker (in case it's stuck)
+    await serverlessAIWorker.forceStop()
     
     // Get updated status
-    const status = aiProcessingWorker.getStatus()
+    const status = await serverlessAIWorker.getStatus()
     
     return NextResponse.json({
       success: true,
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       }
     })
   } catch (error) {
-    console.error('❌ Failed to stop AI worker:', error)
+    console.error('❌ Failed to stop serverless AI worker:', error)
     return NextResponse.json(
       { 
         success: false, 

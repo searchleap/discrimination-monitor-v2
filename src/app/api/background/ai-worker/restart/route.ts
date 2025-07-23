@@ -1,38 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aiProcessingWorker } from '@/lib/ai-worker'
+import { serverlessAIWorker } from '@/lib/serverless-ai-worker'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('🔄 Restarting AI processing worker via API...')
+    console.log('🔄 Restarting serverless AI processing worker via API...')
     
     const body = await request.json().catch(() => ({}))
     const { config } = body
     
     // Update configuration if provided
     if (config) {
-      aiProcessingWorker.updateConfig(config)
+      serverlessAIWorker.updateConfig(config)
     }
     
-    // Restart the worker
-    await aiProcessingWorker.restart()
+    // For serverless worker, "restart" means force stop and then start processing
+    await serverlessAIWorker.forceStop()
+    
+    // Wait a moment
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // Start processing
+    const result = await serverlessAIWorker.startProcessing()
     
     // Get updated status
     const [status, metrics] = await Promise.all([
-      aiProcessingWorker.getStatus(),
-      aiProcessingWorker.getMetrics()
+      serverlessAIWorker.getStatus(),
+      serverlessAIWorker.getMetrics()
     ])
     
     return NextResponse.json({
-      success: true,
-      message: 'AI processing worker restarted successfully',
+      success: result.success,
+      message: result.success 
+        ? 'AI processing worker restarted and processing completed successfully'
+        : `AI processing worker restart failed: ${result.message}`,
       data: {
         status,
         metrics,
+        results: result.results,
+        summary: result.summary,
         restartedAt: new Date().toISOString()
       }
     })
   } catch (error) {
-    console.error('❌ Failed to restart AI worker:', error)
+    console.error('❌ Failed to restart serverless AI worker:', error)
     return NextResponse.json(
       { 
         success: false, 
