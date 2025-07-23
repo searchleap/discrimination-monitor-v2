@@ -15,11 +15,7 @@
   "crons": [
     {
       "path": "/api/cron/process-queue",
-      "schedule": "*/15 9-17 * * 1-5"
-    },
-    {
-      "path": "/api/cron/process-queue",
-      "schedule": "0 * * * *"
+      "schedule": "0 9 * * *"
     }
   ],
   "regions": ["iad1"],
