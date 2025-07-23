@@ -123,6 +123,63 @@ export function useArticleFilters() {
     return params
   }, [filters])
 
+  // Listen for filter events from metric cards
+  useEffect(() => {
+    const handleApplyFilter = (event: CustomEvent) => {
+      const { filter, label } = event.detail
+      console.log('Applying filter from metric card:', filter, label)
+      
+      // Map the filter object to our filter interface
+      const filterUpdates: Partial<ArticleFilters> = {}
+      
+      if (filter.location) {
+        filterUpdates.location = filter.location.toLowerCase()
+      }
+      if (filter.severity) {
+        filterUpdates.severity = filter.severity.toLowerCase()
+      }
+      if (filter.discriminationType) {
+        filterUpdates.discriminationType = filter.discriminationType.toLowerCase()  
+      }
+      
+      // Clear other filters when applying metric filter to show only that category
+      const newFilters: ArticleFilters = {
+        ...defaultFilters,
+        ...filterUpdates
+      }
+      
+      setFilters(newFilters)
+      updateURL(newFilters)
+    }
+
+    // Add event listener for custom filter events
+    window.addEventListener('applyFilter', handleApplyFilter as EventListener)
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('applyFilter', handleApplyFilter as EventListener)
+    }
+  }, [updateURL])
+
+  // Also update filters when URL changes (for direct navigation)
+  useEffect(() => {
+    if (!searchParams) return
+    
+    const urlFilters = {
+      search: searchParams.get('search') || defaultFilters.search,
+      location: searchParams.get('location') || defaultFilters.location,
+      discriminationType: searchParams.get('type') || defaultFilters.discriminationType,
+      severity: searchParams.get('severity') || defaultFilters.severity,
+      dateRange: searchParams.get('days') || defaultFilters.dateRange,
+      source: searchParams.get('source') || defaultFilters.source
+    }
+    
+    // Only update if filters actually changed
+    if (JSON.stringify(urlFilters) !== JSON.stringify(filters)) {
+      setFilters(urlFilters)
+    }
+  }, [searchParams, filters])
+
   return {
     filters,
     updateFilter,
