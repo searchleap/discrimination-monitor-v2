@@ -5,6 +5,22 @@ All notable changes to the AI Discrimination Monitoring Dashboard will be docume
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2025-07-22
+
+### Fixed - Production Deployment
+- **🚀 Vercel Build Compatibility**: Resolved Next.js 15 deployment issues
+  - Fixed dynamic API route parameter handling for Next.js 15 compatibility
+  - Removed all console statements to resolve ESLint `no-console` violations
+  - Fixed React hooks dependency warnings with proper `useCallback` usage
+  - Ensured function declarations precede useEffect calls to prevent hoisting issues
+  - ✅ Build now passes successfully with full type safety and linting compliance
+
+### Technical Improvements
+- **API Routes**: Updated to use `Promise<{ id: string }>` parameter type in dynamic routes
+- **Code Quality**: Cleaned 19+ console statements from client-side components
+- **Performance**: Optimized React hook dependencies to prevent unnecessary re-renders
+- **Documentation**: Added comprehensive build fix documentation
+
 ## [3.0.0] - 2025-07-22
 
 ### Added - Phase 3: Advanced Features
