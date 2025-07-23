@@ -192,8 +192,7 @@ export class ServerlessAIWorker {
           errorCount: totalFailed,
           processingTime: totalProcessingTime,
           queueDepth: (await aiProcessingQueue.getQueueMetrics()).pending,
-          workerStatus: 'completed',
-          sessionId
+          workerStatus: 'completed'
         })
       } catch (analyticsError) {
         console.warn('⚠️  Failed to record analytics metrics:', analyticsError)
@@ -323,7 +322,7 @@ export class ServerlessAIWorker {
       totalProcessed,
       totalErrors,
       averageProcessingTime: totalStats._avg.processingTime || 0,
-      batchesCompleted: lastSession?.details?.summary?.batchesCompleted || 0,
+      batchesCompleted: (lastSession?.details as any)?.summary?.batchesCompleted || 0,
       lastHourThroughput: recentLogs.length,
       successRate,
       lastSessionDuration: lastSession?.processingTime || undefined
