@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { AIClassifier } from './ai-classifier'
 import { aiProcessingQueue } from './ai-queue'
 import { prisma } from './prisma'
+import { contentFilterMatcher } from './content-filter'
 
 const parser = new Parser({
   customFields: {
@@ -33,6 +34,7 @@ interface ProcessingResult {
   articlesProcessed: number
   newArticles: number
   duplicates: number
+  filteredOut: number // New field for tracking filtered articles
   errors: string[]
 }
 
@@ -58,6 +60,7 @@ export class RSSProcessor {
       articlesProcessed: 0,
       newArticles: 0,
       duplicates: 0,
+      filteredOut: 0,
       errors: []
     }
 
@@ -89,8 +92,10 @@ export class RSSProcessor {
           if (processedArticle) {
             if (processedArticle.isNew) {
               result.newArticles++
-            } else {
+            } else if (processedArticle.isDuplicate) {
               result.duplicates++
+            } else if (processedArticle.isFiltered) {
+              result.filteredOut++
             }
             result.articlesProcessed++
           }
@@ -113,7 +118,7 @@ export class RSSProcessor {
       // Log processing result
       const processingTime = Date.now() - startTime
       await this.logProcessing('RSS_FETCH', 'SUCCESS', 
-        `Processed ${result.articlesProcessed} articles, ${result.newArticles} new`,
+        `Processed ${result.articlesProcessed} articles, ${result.newArticles} new, ${result.filteredOut} filtered out`,
         { feedId, processingTime, ...result }
       )
 
@@ -183,6 +188,7 @@ export class RSSProcessor {
               articlesProcessed: 0,
               newArticles: 0,
               duplicates: 0,
+              filteredOut: 0,
               errors: [`Batch processing failed: ${promise.reason}`]
             }
           }
@@ -197,9 +203,11 @@ export class RSSProcessor {
       // Calculate overall statistics
       const totalProcessed = Object.values(results).reduce((sum, r) => sum + r.articlesProcessed, 0)
       const totalNew = Object.values(results).reduce((sum, r) => sum + r.newArticles, 0)
+      const totalFiltered = Object.values(results).reduce((sum, r) => sum + r.filteredOut, 0)
       const totalErrors = Object.values(results).reduce((sum, r) => sum + r.errors.length, 0)
       
       console.log(`🎉 RSS processing completed: ${totalNew} new articles from ${totalProcessed} total processed`)
+      console.log(`📊 Filtering summary: ${totalFiltered} articles filtered out`)
       console.log(`📊 Error summary: ${totalErrors} errors across ${activeFeeds.length} feeds`)
       
       return results
@@ -213,7 +221,7 @@ export class RSSProcessor {
   /**
    * Process a single article from RSS feed
    */
-  private async processArticle(item: RSSItem, feedId: string, sourceName: string): Promise<{ isNew: boolean } | null> {
+  private async processArticle(item: RSSItem, feedId: string, sourceName: string): Promise<{ isNew: boolean; isDuplicate?: boolean; isFiltered?: boolean } | null> {
     if (!item.title || !item.link) {
       return null
     }
@@ -227,12 +235,31 @@ export class RSSProcessor {
     })
 
     if (existingArticle) {
-      return { isNew: false }
+      return { isNew: false, isDuplicate: true }
     }
 
     // Extract content - prefer contentEncoded over description
     const content = item.contentEncoded || item.content || item.description || ''
     const cleanContent = this.cleanContent(content)
+
+    // Apply content filtering before creating the article
+    const filterResult = await contentFilterMatcher.shouldStoreArticle(item.title, cleanContent)
+    
+    if (!filterResult.shouldStore) {
+      // Log filtering for debugging
+      await this.logProcessing('CONTENT_FILTER', 'INFO', 
+        `Article filtered out: ${item.title.substring(0, 100)}...`,
+        { 
+          feedId, 
+          url: item.link,
+          reason: filterResult.reason,
+          matchedFilters: filterResult.matchedFilters
+        }
+      )
+      
+      console.log(`🚫 Article filtered out: "${item.title.substring(0, 60)}..." - ${filterResult.reason}`)
+      return { isNew: false, isFiltered: true }
+    }
     
     // Parse publication date
     const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()

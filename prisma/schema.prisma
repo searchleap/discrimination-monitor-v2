@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,67 +8,51 @@ datasource db {
 }
 
 model Feed {
-  id            String      @id @default(cuid())
-  name          String
-  url           String      @unique
-  category      FeedCategory
-  isActive      Boolean     @default(true)
-  lastFetched   DateTime?
-  status        FeedStatus  @default(ACTIVE)
-  errorMessage  String?
-  successRate   Float       @default(1.0)
-  
-  // Configuration
-  customHeaders Json?
+  id              String       @id @default(cuid())
+  name            String
+  url             String       @unique
+  category        FeedCategory
+  isActive        Boolean      @default(true)
+  lastFetched     DateTime?
+  status          FeedStatus   @default(ACTIVE)
+  errorMessage    String?
+  successRate     Float        @default(1.0)
+  customHeaders   Json?
   processingRules Json?
-  priority      Int         @default(1)
-  
-  // Metadata
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  
-  // Relations
-  articles      Article[]
-  
+  priority        Int          @default(1)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  articles        Article[]
+
   @@index([category])
   @@index([status])
   @@index([isActive])
 }
 
 model Article {
-  id                String              @id @default(cuid())
-  title             String
-  content           String
-  summary           String?
-  url               String              @unique
-  publishedAt       DateTime
-  source            String
-  feedId            String
-  
-  // Normalized classifications
-  location          ArticleLocation
+  id                 String             @id @default(cuid())
+  title              String
+  content            String
+  summary            String?
+  url                String             @unique
+  publishedAt        DateTime
+  source             String
+  feedId             String
+  location           ArticleLocation
   discriminationType DiscriminationType
-  severity          SeverityLevel
-  
-  // Extracted entities
-  organizations     String[]
-  keywords          String[]
-  entities          Json?               // JSON object with locations, people, organizations arrays
-  
-  // Processing metadata
-  processed         Boolean             @default(false)
-  processingError   String?
-  confidenceScore   Float?
-  aiClassification  Json?               // Store AI classification details
-  
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  
-  // Relations
-  feed              Feed                @relation(fields: [feedId], references: [id], onDelete: Cascade)
-  processingQueue   ProcessingQueue?
-  
+  severity           SeverityLevel
+  organizations      String[]
+  keywords           String[]
+  entities           Json?
+  processed          Boolean            @default(false)
+  processingError    String?
+  confidenceScore    Float?
+  aiClassification   Json?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  feed               Feed               @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  processingQueue    ProcessingQueue?
+
   @@index([location, publishedAt])
   @@index([discriminationType])
   @@index([severity, publishedAt])
@@ -81,19 +62,16 @@ model Article {
 }
 
 model ProcessingLog {
-  id              String    @id @default(cuid())
-  type            String    // "RSS_FETCH", "AI_CLASSIFICATION", "DUPLICATE_CHECK", "QUEUE_PROCESSING"
-  status          String    // "SUCCESS", "ERROR", "WARNING", "IN_PROGRESS"
-  message         String?
-  details         Json?
-  processingTime  Int?      // milliseconds
-  
-  // Relations
-  feedId          String?
-  articleId       String?
-  
-  createdAt       DateTime  @default(now())
-  
+  id             String   @id @default(cuid())
+  type           String
+  status         String
+  message        String?
+  details        Json?
+  processingTime Int?
+  feedId         String?
+  articleId      String?
+  createdAt      DateTime @default(now())
+
   @@index([type, status])
   @@index([createdAt])
 }
@@ -103,48 +81,164 @@ model ProcessingQueue {
   articleId   String        @unique
   priority    QueuePriority @default(MEDIUM)
   status      QueueStatus   @default(PENDING)
-  retryCount  Int          @default(0)
-  maxRetries  Int          @default(3)
+  retryCount  Int           @default(0)
+  maxRetries  Int           @default(3)
   error       String?
-  queuedAt    DateTime     @default(now())
+  queuedAt    DateTime      @default(now())
   processedAt DateTime?
-  
-  // Relations
-  article     Article      @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  
+  article     Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
   @@index([status, priority])
   @@index([queuedAt])
   @@index([processedAt])
 }
 
 model SystemMetrics {
-  id              String    @id @default(cuid())
-  date            DateTime  @unique @default(now())
-  
-  // Feed metrics
-  totalFeeds      Int
-  activeFeeds     Int
-  successfulFeeds Int
-  failedFeeds     Int
-  
-  // Article metrics
-  totalArticles   Int
-  michiganArticles Int
-  nationalArticles Int
-  internationalArticles Int
-  
-  // Processing metrics
-  avgProcessingTime Int    // milliseconds
+  id                     String   @id @default(cuid())
+  date                   DateTime @unique @default(now())
+  totalFeeds             Int
+  activeFeeds            Int
+  successfulFeeds        Int
+  failedFeeds            Int
+  totalArticles          Int
+  michiganArticles       Int
+  nationalArticles       Int
+  internationalArticles  Int
+  avgProcessingTime      Int
   classificationAccuracy Float?
   duplicateDetectionRate Float?
-  
-  // User metrics
-  dailyActiveUsers Int?
-  exportDownloads Int?
-  
-  createdAt       DateTime  @default(now())
-  
+  dailyActiveUsers       Int?
+  exportDownloads        Int?
+  createdAt              DateTime @default(now())
+
   @@index([date])
+}
+
+model ProcessingMetrics {
+  id             String   @id @default(cuid())
+  timestamp      DateTime @default(now())
+  batchSize      Int
+  processedCount Int
+  successCount   Int
+  errorCount     Int
+  processingTime Int
+  queueDepth     Int
+  workerStatus   String
+  providerId     String?
+  throughput     Float?
+  averageLatency Int?
+  errorRate      Float?
+  memoryUsage    Int?
+  cpuUsage       Float?
+
+  @@index([timestamp])
+  @@index([providerId])
+}
+
+model AlertConfig {
+  id              String         @id @default(cuid())
+  name            String         @unique
+  type            AlertType
+  enabled         Boolean        @default(true)
+  threshold       Json
+  severity        AlertSeverity  @default(MEDIUM)
+  channels        Json
+  config          Json
+  escalationDelay Int?
+  escalationTo    Json?
+  lastTriggered   DateTime?
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  suppressedUntil DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  history         AlertHistory[]
+
+  @@index([type, enabled])
+  @@index([lastTriggered])
+}
+
+model AlertHistory {
+  id             String        @id @default(cuid())
+  alertConfigId  String
+  severity       AlertSeverity
+  message        String
+  details        Json?
+  status         AlertStatus   @default(ACTIVE)
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  resolvedAt     DateTime?
+  triggeredAt    DateTime      @default(now())
+  alertConfig    AlertConfig   @relation(fields: [alertConfigId], references: [id], onDelete: Cascade)
+
+  @@index([alertConfigId, triggeredAt])
+  @@index([status])
+  @@index([severity])
+}
+
+model AIProvider {
+  id             String       @id @default(cuid())
+  name           String       @unique
+  type           ProviderType
+  enabled        Boolean      @default(true)
+  priority       Int          @default(1)
+  config         Json
+  rateLimits     Json?
+  lastUsed       DateTime?
+  errorCount     Int          @default(0)
+  successCount   Int          @default(0)
+  successRate    Float        @default(1.0)
+  averageLatency Int?
+  requestCount   Int          @default(0)
+  tokenUsage     Int          @default(0)
+  estimatedCost  Float        @default(0.0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([type, enabled])
+  @@index([priority])
+  @@index([successRate])
+}
+
+model ProcessingSchedule {
+  id                  String              @id @default(cuid())
+  name                String              @unique
+  description         String?
+  cronExpression      String
+  priority            SchedulePriority    @default(MEDIUM)
+  enabled             Boolean             @default(true)
+  config              Json
+  lastRun             DateTime?
+  nextRun             DateTime
+  lastDuration        Int?
+  lastResult          String?
+  consecutiveFailures Int                 @default(0)
+  slaTarget           Int?
+  slaViolations       Int                 @default(0)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  executions          ScheduleExecution[]
+
+  @@index([enabled, nextRun])
+  @@index([priority])
+}
+
+model ScheduleExecution {
+  id             String             @id @default(cuid())
+  scheduleId     String
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+  status         ExecutionStatus    @default(RUNNING)
+  itemsProcessed Int                @default(0)
+  itemsSucceeded Int                @default(0)
+  itemsFailed    Int                @default(0)
+  errorMessage   String?
+  duration       Int?
+  peakMemory     Int?
+  schedule       ProcessingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, startedAt])
+  @@index([status])
 }
 
 enum FeedCategory {
@@ -200,178 +294,6 @@ enum QueueStatus {
   FAILED
 }
 
-// Phase 3: Advanced Features Schema Extensions
-
-model ProcessingMetrics {
-  id              String    @id @default(cuid())
-  timestamp       DateTime  @default(now())
-  batchSize       Int
-  processedCount  Int
-  successCount    Int
-  errorCount      Int
-  processingTime  Int       // milliseconds
-  queueDepth      Int
-  workerStatus    String
-  providerId      String?
-  
-  // Performance metrics
-  throughput      Float?    // items per minute
-  averageLatency  Int?      // milliseconds
-  errorRate       Float?    // percentage
-  memoryUsage     Int?      // MB
-  cpuUsage        Float?    // percentage
-  
-  @@index([timestamp])
-  @@index([providerId])
-}
-
-model AlertConfig {
-  id              String      @id @default(cuid())
-  name            String      @unique
-  type            AlertType
-  enabled         Boolean     @default(true)
-  
-  // Threshold configuration
-  threshold       Json        // { metric: string, operator: string, value: number }
-  severity        AlertSeverity @default(MEDIUM)
-  
-  // Notification configuration
-  channels        Json        // Array of notification channels
-  config          Json        // Channel-specific configuration
-  
-  // Escalation rules
-  escalationDelay Int?        // minutes before escalation
-  escalationTo    Json?       // Escalation contacts/channels
-  
-  // State management
-  lastTriggered   DateTime?
-  acknowledgedAt  DateTime?
-  acknowledgedBy  String?
-  suppressedUntil DateTime?
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  // Relations
-  history         AlertHistory[]
-  
-  @@index([type, enabled])
-  @@index([lastTriggered])
-}
-
-model AlertHistory {
-  id              String      @id @default(cuid())
-  alertConfigId   String
-  severity        AlertSeverity
-  message         String
-  details         Json?
-  
-  // State tracking
-  status          AlertStatus @default(ACTIVE)
-  acknowledgedAt  DateTime?
-  acknowledgedBy  String?
-  resolvedAt      DateTime?
-  
-  // Metadata
-  triggeredAt     DateTime    @default(now())
-  
-  // Relations
-  alertConfig     AlertConfig @relation(fields: [alertConfigId], references: [id], onDelete: Cascade)
-  
-  @@index([alertConfigId, triggeredAt])
-  @@index([status])
-  @@index([severity])
-}
-
-model AIProvider {
-  id              String        @id @default(cuid())
-  name            String        @unique
-  type            ProviderType
-  enabled         Boolean       @default(true)
-  priority        Int           @default(1)
-  
-  // Configuration
-  config          Json          // API keys, endpoints, model settings
-  rateLimits      Json?         // Request/minute limits, quotas
-  
-  // Health metrics
-  lastUsed        DateTime?
-  errorCount      Int           @default(0)
-  successCount    Int           @default(0)
-  successRate     Float         @default(1.0)
-  averageLatency  Int?          // milliseconds
-  
-  // Cost tracking
-  requestCount    Int           @default(0)
-  tokenUsage      Int           @default(0)
-  estimatedCost   Float         @default(0.0)
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  @@index([type, enabled])
-  @@index([priority])
-  @@index([successRate])
-}
-
-model ProcessingSchedule {
-  id              String            @id @default(cuid())
-  name            String            @unique
-  description     String?
-  cronExpression  String
-  priority        SchedulePriority  @default(MEDIUM)
-  enabled         Boolean           @default(true)
-  
-  // Configuration
-  config          Json              // Batch sizes, timeouts, filters
-  
-  // Execution tracking
-  lastRun         DateTime?
-  nextRun         DateTime
-  lastDuration    Int?              // milliseconds
-  lastResult      String?           // SUCCESS, ERROR, PARTIAL
-  consecutiveFailures Int           @default(0)
-  
-  // SLA tracking
-  slaTarget       Int?              // Target execution time in minutes
-  slaViolations   Int               @default(0)
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  // Relations
-  executions      ScheduleExecution[]
-  
-  @@index([enabled, nextRun])
-  @@index([priority])
-}
-
-model ScheduleExecution {
-  id              String            @id @default(cuid())
-  scheduleId      String
-  startedAt       DateTime          @default(now())
-  completedAt     DateTime?
-  status          ExecutionStatus   @default(RUNNING)
-  
-  // Results
-  itemsProcessed  Int               @default(0)
-  itemsSucceeded  Int               @default(0)
-  itemsFailed     Int               @default(0)
-  errorMessage    String?
-  
-  // Performance
-  duration        Int?              // milliseconds
-  peakMemory      Int?              // MB
-  
-  // Relations
-  schedule        ProcessingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  
-  @@index([scheduleId, startedAt])
-  @@index([status])
-}
-
-// Additional Enums for Phase 3
-
 enum AlertType {
   QUEUE_BACKLOG
   PROCESSING_FAILURE
@@ -417,4 +339,49 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+// Content Filtering System
+
+model ContentFilter {
+  id          String    @id @default(cuid())
+  term        String    // Keyword or phrase to match
+  isActive    Boolean   @default(true)
+  category    String?   // Optional grouping (e.g., "discrimination", "ai", "legal")
+  description String?   // Admin notes about the filter
+  matchCount  Int       @default(0) // Track how many articles matched this filter
+  
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?   // Admin user who created it
+  
+  @@index([isActive])
+  @@index([category])
+  @@index([term])
+}
+
+model FilteringConfig {
+  id              String      @id @default(cuid())
+  name            String      @unique
+  isActive        Boolean     @default(true)
+  filterMode      FilterMode  @default(OR) // OR = any match, AND = all must match
+  minTermLength   Int         @default(3)   // Minimum term length
+  caseSensitive   Boolean     @default(false)
+  
+  // Statistics
+  articlesFiltered    Int       @default(0) // Articles that were rejected
+  articlesAccepted    Int       @default(0) // Articles that passed filtering
+  lastApplied         DateTime?
+  
+  // Metadata
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@index([isActive])
+}
+
+enum FilterMode {
+  OR   // Any filter matches = accept article
+  AND  // All filters must match = accept article
 }

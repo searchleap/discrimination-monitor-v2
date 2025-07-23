@@ -28,6 +28,7 @@ import {
 import { RSSMonitor } from '@/components/admin/RSSMonitor'
 import { AIProcessingMonitor } from '@/components/admin/AIProcessingMonitor'
 import AdvancedMonitor from '@/components/admin/AdvancedMonitor'
+import ContentFilterManager from '@/components/admin/ContentFilterManager'
 
 interface RSSFeed {
   id: string
@@ -101,7 +102,7 @@ const StatusIndicator = ({
 }
 
 export function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'feeds' | 'monitor' | 'ai-processing' | 'advanced'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'feeds' | 'monitor' | 'ai-processing' | 'content-filters' | 'advanced'>('overview')
   const [feeds, setFeeds] = useState<RSSFeed[]>([])
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -372,6 +373,17 @@ export function AdminPanel() {
           >
             <Activity className="h-4 w-4 inline mr-2" />
             AI Processing
+          </button>
+          <button
+            onClick={() => setActiveTab('content-filters')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'content-filters'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Shield className="h-4 w-4 inline mr-2" />
+            Content Filters
           </button>
           <button
             onClick={() => setActiveTab('advanced')}
@@ -702,6 +714,10 @@ export function AdminPanel() {
 
       {activeTab === 'ai-processing' && (
         <AIProcessingMonitor />
+      )}
+
+      {activeTab === 'content-filters' && (
+        <ContentFilterManager />
       )}
 
       {activeTab === 'advanced' && (
