@@ -296,13 +296,7 @@ export interface QueueStatus {
   workerStatus: 'running' | 'stopped' | 'error'
 }
 
-export interface ProcessingResult {
-  processed: number
-  successful: number
-  failed: number
-  errors: Array<{ articleId: string; error: string }>
-  processingTime: number
-}
+
 
 // Export the types defined above
 // These will be replaced by Prisma-generated types in production

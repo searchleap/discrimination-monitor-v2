@@ -7,7 +7,7 @@ export interface QueueItem {
   id: string
   articleId: string
   priority: QueuePriority
-  status: PrismaQueueStatus
+  status: QueueStatus
   retryCount: number
   maxRetries: number
   error?: string | null
@@ -90,7 +90,7 @@ export class AIProcessingQueue {
         if (this.getPriorityWeight(priority) > this.getPriorityWeight(existing.priority)) {
           await prisma.processingQueue.update({
             where: { articleId },
-            data: { priority, status: PrismaQueueStatus.PENDING }
+            data: { priority, status: QueueStatus.PENDING }
           })
           console.log(`Updated queue priority for article ${articleId} to ${priority}`)
         }
@@ -102,7 +102,7 @@ export class AIProcessingQueue {
         data: {
           articleId,
           priority,
-          status: PrismaQueueStatus.PENDING,
+          status: QueueStatus.PENDING,
           maxRetries: this.maxRetries
         }
       })
@@ -172,7 +172,7 @@ export class AIProcessingQueue {
       // Get next batch of pending items with highest priority first
       const queueItems = await prisma.processingQueue.findMany({
         where: { 
-          status: PrismaQueueStatus.PENDING,
+          status: QueueStatus.PENDING,
           retryCount: { lt: prisma.processingQueue.fields.maxRetries }
         },
         include: {
@@ -207,7 +207,7 @@ export class AIProcessingQueue {
       const itemIds = queueItems.map(item => item.id)
       await prisma.processingQueue.updateMany({
         where: { id: { in: itemIds } },
-        data: { status: PrismaQueueStatus.PROCESSING }
+        data: { status: QueueStatus.PROCESSING }
       })
 
       // Process each item
@@ -317,11 +317,11 @@ export class AIProcessingQueue {
     // Reset failed items that haven't exceeded max retries
     const resetCount = await prisma.processingQueue.updateMany({
       where: {
-        status: PrismaQueueStatus.FAILED,
+        status: QueueStatus.FAILED,
         retryCount: { lt: prisma.processingQueue.fields.maxRetries }
       },
       data: {
-        status: PrismaQueueStatus.PENDING,
+        status: QueueStatus.PENDING,
         error: null
       }
     })
@@ -350,7 +350,7 @@ export class AIProcessingQueue {
       
       // Oldest pending item
       prisma.processingQueue.findFirst({
-        where: { status: PrismaQueueStatus.PENDING },
+        where: { status: QueueStatus.PENDING },
         orderBy: { queuedAt: 'asc' },
         select: { queuedAt: true }
       }),
@@ -380,20 +380,20 @@ export class AIProcessingQueue {
     }
 
     statusCounts.forEach(count => {
-      const status = count.status as PrismaQueueStatus
+      const status = count.status as QueueStatus
       const countValue = count._count.status
       
       switch (status) {
-        case PrismaQueueStatus.PENDING:
+        case QueueStatus.PENDING:
           metrics.pending = countValue
           break
-        case PrismaQueueStatus.PROCESSING:
+        case QueueStatus.PROCESSING:
           metrics.processing = countValue
           break
-        case PrismaQueueStatus.COMPLETED:
+        case QueueStatus.COMPLETED:
           metrics.completed = countValue
           break
-        case PrismaQueueStatus.FAILED:
+        case QueueStatus.FAILED:
           metrics.failed = countValue
           break
       }
@@ -416,7 +416,7 @@ export class AIProcessingQueue {
     
     return {
       isProcessing: this.isProcessing,
-      lastProcessed: (await this.getLastProcessedTime()) || null,
+      lastProcessed: await this.getLastProcessedTime(),
       nextScheduled: new Date(Date.now() + this.processingInterval),
       workerStatus: this.isProcessing ? 'running' : 'stopped'
     }
@@ -426,7 +426,7 @@ export class AIProcessingQueue {
    * Get queue items with optional filtering
    */
   async getQueueItems(
-    status?: PrismaQueueStatus,
+    status?: QueueStatus,
     limit: number = 50,
     offset: number = 0
   ): Promise<QueueItem[]> {
@@ -478,7 +478,7 @@ export class AIProcessingQueue {
     
     const result = await prisma.processingQueue.deleteMany({
       where: {
-        status: PrismaQueueStatus.COMPLETED,
+        status: QueueStatus.COMPLETED,
         processedAt: { lt: cutoffDate }
       }
     })
@@ -498,7 +498,7 @@ export class AIProcessingQueue {
     await prisma.processingQueue.update({
       where: { id: queueItemId },
       data: {
-        status: PrismaQueueStatus.COMPLETED,
+        status: QueueStatus.COMPLETED,
         processedAt: new Date(),
         error: null
       }
@@ -512,7 +512,7 @@ export class AIProcessingQueue {
     await prisma.processingQueue.update({
       where: { id: queueItem.id },
       data: {
-        status: shouldRetry ? PrismaQueueStatus.PENDING : PrismaQueueStatus.FAILED,
+        status: shouldRetry ? QueueStatus.PENDING : QueueStatus.FAILED,
         retryCount: newRetryCount,
         error: error
       }
@@ -542,7 +542,7 @@ export class AIProcessingQueue {
 
   private async getLastProcessedTime(): Promise<Date | undefined> {
     const lastProcessed = await prisma.processingQueue.findFirst({
-      where: { status: PrismaQueueStatus.COMPLETED },
+      where: { status: QueueStatus.COMPLETED },
       orderBy: { processedAt: 'desc' },
       select: { processedAt: true }
     })

@@ -199,3 +199,222 @@ enum QueueStatus {
   COMPLETED
   FAILED
 }
+
+// Phase 3: Advanced Features Schema Extensions
+
+model ProcessingMetrics {
+  id              String    @id @default(cuid())
+  timestamp       DateTime  @default(now())
+  batchSize       Int
+  processedCount  Int
+  successCount    Int
+  errorCount      Int
+  processingTime  Int       // milliseconds
+  queueDepth      Int
+  workerStatus    String
+  providerId      String?
+  
+  // Performance metrics
+  throughput      Float?    // items per minute
+  averageLatency  Int?      // milliseconds
+  errorRate       Float?    // percentage
+  memoryUsage     Int?      // MB
+  cpuUsage        Float?    // percentage
+  
+  @@index([timestamp])
+  @@index([providerId])
+}
+
+model AlertConfig {
+  id              String      @id @default(cuid())
+  name            String      @unique
+  type            AlertType
+  enabled         Boolean     @default(true)
+  
+  // Threshold configuration
+  threshold       Json        // { metric: string, operator: string, value: number }
+  severity        AlertSeverity @default(MEDIUM)
+  
+  // Notification configuration
+  channels        Json        // Array of notification channels
+  config          Json        // Channel-specific configuration
+  
+  // Escalation rules
+  escalationDelay Int?        // minutes before escalation
+  escalationTo    Json?       // Escalation contacts/channels
+  
+  // State management
+  lastTriggered   DateTime?
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  suppressedUntil DateTime?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  history         AlertHistory[]
+  
+  @@index([type, enabled])
+  @@index([lastTriggered])
+}
+
+model AlertHistory {
+  id              String      @id @default(cuid())
+  alertConfigId   String
+  severity        AlertSeverity
+  message         String
+  details         Json?
+  
+  // State tracking
+  status          AlertStatus @default(ACTIVE)
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+  resolvedAt      DateTime?
+  
+  // Metadata
+  triggeredAt     DateTime    @default(now())
+  
+  // Relations
+  alertConfig     AlertConfig @relation(fields: [alertConfigId], references: [id], onDelete: Cascade)
+  
+  @@index([alertConfigId, triggeredAt])
+  @@index([status])
+  @@index([severity])
+}
+
+model AIProvider {
+  id              String        @id @default(cuid())
+  name            String        @unique
+  type            ProviderType
+  enabled         Boolean       @default(true)
+  priority        Int           @default(1)
+  
+  // Configuration
+  config          Json          // API keys, endpoints, model settings
+  rateLimits      Json?         // Request/minute limits, quotas
+  
+  // Health metrics
+  lastUsed        DateTime?
+  errorCount      Int           @default(0)
+  successCount    Int           @default(0)
+  successRate     Float         @default(1.0)
+  averageLatency  Int?          // milliseconds
+  
+  // Cost tracking
+  requestCount    Int           @default(0)
+  tokenUsage      Int           @default(0)
+  estimatedCost   Float         @default(0.0)
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([type, enabled])
+  @@index([priority])
+  @@index([successRate])
+}
+
+model ProcessingSchedule {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  description     String?
+  cronExpression  String
+  priority        SchedulePriority  @default(MEDIUM)
+  enabled         Boolean           @default(true)
+  
+  // Configuration
+  config          Json              // Batch sizes, timeouts, filters
+  
+  // Execution tracking
+  lastRun         DateTime?
+  nextRun         DateTime
+  lastDuration    Int?              // milliseconds
+  lastResult      String?           // SUCCESS, ERROR, PARTIAL
+  consecutiveFailures Int           @default(0)
+  
+  // SLA tracking
+  slaTarget       Int?              // Target execution time in minutes
+  slaViolations   Int               @default(0)
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations
+  executions      ScheduleExecution[]
+  
+  @@index([enabled, nextRun])
+  @@index([priority])
+}
+
+model ScheduleExecution {
+  id              String            @id @default(cuid())
+  scheduleId      String
+  startedAt       DateTime          @default(now())
+  completedAt     DateTime?
+  status          ExecutionStatus   @default(RUNNING)
+  
+  // Results
+  itemsProcessed  Int               @default(0)
+  itemsSucceeded  Int               @default(0)
+  itemsFailed     Int               @default(0)
+  errorMessage    String?
+  
+  // Performance
+  duration        Int?              // milliseconds
+  peakMemory      Int?              // MB
+  
+  // Relations
+  schedule        ProcessingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  
+  @@index([scheduleId, startedAt])
+  @@index([status])
+}
+
+// Additional Enums for Phase 3
+
+enum AlertType {
+  QUEUE_BACKLOG
+  PROCESSING_FAILURE
+  SYSTEM_HEALTH
+  PERFORMANCE_DEGRADATION
+  PROVIDER_FAILURE
+  SCHEDULE_MISSED
+  RESOURCE_EXHAUSTION
+  CUSTOM
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  SUPPRESSED
+}
+
+enum ProviderType {
+  OPENAI
+  ANTHROPIC
+  LOCAL
+  CUSTOM
+}
+
+enum SchedulePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ExecutionStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

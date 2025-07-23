@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { aiProcessingQueue } from '@/lib/ai-queue'
+import { QueueStatus } from '@prisma/client'
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get information about failed items that can be retried
     const queueMetrics = await aiProcessingQueue.getQueueMetrics()
-    const failedItems = await aiProcessingQueue.getQueueItems('FAILED', 50, 0)
+    const failedItems = await aiProcessingQueue.getQueueItems(QueueStatus.FAILED, 50, 0)
     
     // Categorize failed items by retry count
     const retryableFailed = failedItems.filter(item => item.retryCount < item.maxRetries)

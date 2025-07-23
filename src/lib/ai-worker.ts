@@ -1,5 +1,6 @@
 import { aiProcessingQueue, ProcessingResult } from './ai-queue'
 import { prisma } from './prisma'
+import { analyticsEngine } from './analytics-engine'
 
 export interface WorkerConfig {
   enabled: boolean
@@ -277,6 +278,24 @@ export class AIProcessingWorker {
         `Processed batch: ${result.successful} successful, ${result.failed} failed`,
         { result, processingTime }
       )
+
+      // Record analytics metrics
+      try {
+        await analyticsEngine.recordMetrics({
+          timestamp: new Date(),
+          batchSize: this.config.batchSize,
+          processedCount: result.successful + result.failed,
+          successCount: result.successful,
+          errorCount: result.failed,
+          processingTime,
+          queueDepth: queueMetrics.pending - (result.successful + result.failed),
+          workerStatus: this.status.health,
+          memoryUsage: process.memoryUsage ? Math.round(process.memoryUsage().heapUsed / 1024 / 1024) : undefined,
+          cpuUsage: undefined // Can be added with more sophisticated monitoring
+        })
+      } catch (analyticsError) {
+        console.warn('⚠️  Failed to record analytics metrics:', analyticsError)
+      }
 
       // Update health status
       this.updateHealthStatus(result)
