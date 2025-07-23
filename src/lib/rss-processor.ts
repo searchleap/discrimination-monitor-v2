@@ -1,8 +1,8 @@
 import Parser from 'rss-parser'
-import { PrismaClient } from '@prisma/client'
 import { createHash } from 'crypto'
 import { AIClassifier } from './ai-classifier'
 import { aiProcessingQueue } from './ai-queue'
+import { prisma } from './prisma'
 
 const parser = new Parser({
   customFields: {
@@ -15,7 +15,7 @@ const parser = new Parser({
   }
 })
 
-const prisma = new PrismaClient()
+
 
 interface RSSItem {
   title?: string

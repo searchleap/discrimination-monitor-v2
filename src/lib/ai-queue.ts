@@ -1,7 +1,6 @@
-import { PrismaClient, QueuePriority, QueueStatus as PrismaQueueStatus } from '@prisma/client'
+import { QueuePriority, QueueStatus as PrismaQueueStatus } from '@prisma/client'
 import { AIClassifier } from './ai-classifier'
-
-const prisma = new PrismaClient()
+import { prisma } from './prisma'
 
 export interface QueueItem {
   id: string
