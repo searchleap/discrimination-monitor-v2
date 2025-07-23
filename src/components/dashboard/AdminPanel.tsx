@@ -26,6 +26,7 @@ import {
   Globe
 } from 'lucide-react'
 import { RSSMonitor } from '@/components/admin/RSSMonitor'
+import { AIProcessingMonitor } from '@/components/admin/AIProcessingMonitor'
 
 interface RSSFeed {
   id: string
@@ -99,7 +100,7 @@ const StatusIndicator = ({
 }
 
 export function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'feeds' | 'monitor'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'feeds' | 'monitor' | 'ai-processing'>('overview')
   const [feeds, setFeeds] = useState<RSSFeed[]>([])
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -359,6 +360,17 @@ export function AdminPanel() {
           >
             <Settings className="h-4 w-4 inline mr-2" />
             RSS Monitor
+          </button>
+          <button
+            onClick={() => setActiveTab('ai-processing')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'ai-processing'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Activity className="h-4 w-4 inline mr-2" />
+            AI Processing
           </button>
         </nav>
       </div>
@@ -674,6 +686,10 @@ export function AdminPanel() {
 
       {activeTab === 'monitor' && (
         <RSSMonitor />
+      )}
+
+      {activeTab === 'ai-processing' && (
+        <AIProcessingMonitor />
       )}
     </div>
   )

@@ -1,0 +1,569 @@
+import { PrismaClient, QueuePriority, QueueStatus } from '@prisma/client'
+import { AIClassifier } from './ai-classifier'
+
+const prisma = new PrismaClient()
+
+export interface QueueItem {
+  id: string
+  articleId: string
+  priority: QueuePriority
+  status: QueueStatus
+  retryCount: number
+  maxRetries: number
+  error?: string | null
+  queuedAt: Date
+  processedAt?: Date | null
+  article?: {
+    id: string
+    title: string
+    content: string
+    url: string
+    source: string
+    publishedAt: Date
+    feedId: string
+    processed: boolean
+  }
+}
+
+export interface QueueMetrics {
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+  total: number
+  oldestPending?: Date
+  newestPending?: Date
+  averageProcessingTime?: number
+  successRate: number
+}
+
+export interface QueueStatus {
+  isProcessing: boolean
+  currentBatch?: string[]
+  lastProcessed?: Date
+  nextScheduled?: Date
+  workerStatus: 'running' | 'stopped' | 'error'
+}
+
+export interface ProcessingResult {
+  processed: number
+  successful: number
+  failed: number
+  errors: Array<{ articleId: string; error: string }>
+  processingTime: number
+}
+
+export class AIProcessingQueue {
+  private aiClassifier: AIClassifier
+  private isProcessing: boolean = false
+  private batchSize: number = parseInt(process.env.AI_QUEUE_BATCH_SIZE || '5')
+  private processingInterval: number = parseInt(process.env.AI_QUEUE_INTERVAL || '30000') // 30 seconds
+  private maxRetries: number = parseInt(process.env.AI_QUEUE_MAX_RETRIES || '3')
+
+  constructor() {
+    this.aiClassifier = new AIClassifier()
+    console.log(`AI Processing Queue initialized with batch size: ${this.batchSize}`)
+  }
+
+  /**
+   * Add an article to the AI processing queue
+   */
+  async addToQueue(
+    articleId: string, 
+    priority: QueuePriority = QueuePriority.MEDIUM
+  ): Promise<void> {
+    try {
+      // Check if article is already in queue
+      const existing = await prisma.processingQueue.findUnique({
+        where: { articleId }
+      })
+
+      if (existing) {
+        // Update priority if new priority is higher
+        if (this.getPriorityWeight(priority) > this.getPriorityWeight(existing.priority)) {
+          await prisma.processingQueue.update({
+            where: { articleId },
+            data: { priority, status: QueueStatus.PENDING }
+          })
+          console.log(`Updated queue priority for article ${articleId} to ${priority}`)
+        }
+        return
+      }
+
+      // Add to queue
+      await prisma.processingQueue.create({
+        data: {
+          articleId,
+          priority,
+          status: QueueStatus.PENDING,
+          maxRetries: this.maxRetries
+        }
+      })
+
+      // Log queue addition
+      await this.logQueueOperation('QUEUE_ADD', 'SUCCESS', 
+        `Article ${articleId} added to AI processing queue with priority ${priority}`,
+        { articleId, priority }
+      )
+
+      console.log(`✅ Added article ${articleId} to AI processing queue (priority: ${priority})`)
+    } catch (error) {
+      console.error(`❌ Failed to add article ${articleId} to queue:`, error)
+      await this.logQueueOperation('QUEUE_ADD', 'ERROR',
+        `Failed to add article ${articleId} to queue: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { articleId, error: error instanceof Error ? error.message : 'Unknown error' }
+      )
+      throw error
+    }
+  }
+
+  /**
+   * Add multiple articles to queue (bulk operation)
+   */
+  async bulkAddToQueue(
+    articleIds: string[], 
+    priority: QueuePriority = QueuePriority.MEDIUM
+  ): Promise<{ added: number; skipped: number; errors: string[] }> {
+    const result = { added: 0, skipped: 0, errors: [] as string[] }
+
+    for (const articleId of articleIds) {
+      try {
+        await this.addToQueue(articleId, priority)
+        result.added++
+      } catch (error) {
+        result.errors.push(`${articleId}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
+    await this.logQueueOperation('QUEUE_BULK_ADD', 'SUCCESS',
+      `Bulk added ${result.added} articles to queue, ${result.skipped} skipped, ${result.errors.length} errors`,
+      { added: result.added, skipped: result.skipped, errors: result.errors }
+    )
+
+    return result
+  }
+
+  /**
+   * Process the next batch of items in the queue
+   */
+  async processQueue(): Promise<ProcessingResult> {
+    if (this.isProcessing) {
+      throw new Error('Queue processing is already in progress')
+    }
+
+    this.isProcessing = true
+    const startTime = Date.now()
+    const result: ProcessingResult = {
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      errors: [],
+      processingTime: 0
+    }
+
+    try {
+      // Get next batch of pending items with highest priority first
+      const queueItems = await prisma.processingQueue.findMany({
+        where: { 
+          status: QueueStatus.PENDING,
+          retryCount: { lt: prisma.processingQueue.fields.maxRetries }
+        },
+        include: {
+          article: {
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              url: true,
+              source: true,
+              publishedAt: true,
+              feedId: true,
+              processed: true
+            }
+          }
+        },
+        orderBy: [
+          { priority: 'asc' }, // HIGH = 0, MEDIUM = 1, LOW = 2
+          { queuedAt: 'asc' }   // FIFO within same priority
+        ],
+        take: this.batchSize
+      })
+
+      if (queueItems.length === 0) {
+        console.log('📭 No items in AI processing queue')
+        return result
+      }
+
+      console.log(`🔄 Processing ${queueItems.length} items from AI queue...`)
+
+      // Mark items as processing
+      const itemIds = queueItems.map(item => item.id)
+      await prisma.processingQueue.updateMany({
+        where: { id: { in: itemIds } },
+        data: { status: QueueStatus.PROCESSING }
+      })
+
+      // Process each item
+      for (const queueItem of queueItems) {
+        const itemStartTime = Date.now()
+        result.processed++
+
+        try {
+          // Skip if article is already processed
+          if (queueItem.article.processed) {
+            await this.markItemCompleted(queueItem.id)
+            result.successful++
+            console.log(`⏭️  Skipped already processed article: ${queueItem.article.title}`)
+            continue
+          }
+
+          // Perform AI classification
+          const classification = await this.aiClassifier.classifyArticle(queueItem.article as any)
+          const itemProcessingTime = Date.now() - itemStartTime
+
+          // Update article with classification
+          await prisma.article.update({
+            where: { id: queueItem.articleId },
+            data: {
+              location: classification.location,
+              discriminationType: classification.discriminationType,
+              severity: classification.severity,
+              confidenceScore: classification.confidenceScore,
+              organizations: classification.entities.organizations,
+              keywords: [...(queueItem.article as any).keywords || [], ...classification.keywords],
+              entities: classification.entities,
+              processed: true,
+              aiClassification: {
+                reasoning: classification.reasoning,
+                entities: classification.entities,
+                timestamp: new Date().toISOString(),
+                processingTime: itemProcessingTime,
+                provider: process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fallback'
+              }
+            }
+          })
+
+          // Mark queue item as completed
+          await this.markItemCompleted(queueItem.id)
+          result.successful++
+
+          // Log successful classification
+          await this.logQueueOperation('AI_CLASSIFICATION', 'SUCCESS',
+            `Article classified: ${classification.discriminationType}/${classification.severity} (${Math.round(classification.confidenceScore * 100)}% confidence)`,
+            { 
+              articleId: queueItem.articleId,
+              classification,
+              processingTime: itemProcessingTime,
+              confidence: classification.confidenceScore
+            }
+          )
+
+          console.log(`🤖 Classified "${queueItem.article.title}": ${classification.discriminationType}/${classification.severity} (${Math.round(classification.confidenceScore * 100)}% confidence)`)
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          result.failed++
+          result.errors.push({ articleId: queueItem.articleId, error: errorMessage })
+
+          // Increment retry count or mark as failed
+          await this.handleProcessingError(queueItem, errorMessage)
+
+          console.error(`❌ Failed to classify article ${queueItem.articleId}:`, error)
+        }
+      }
+
+      result.processingTime = Date.now() - startTime
+
+      // Log batch processing result
+      await this.logQueueOperation('QUEUE_PROCESS_BATCH', 'SUCCESS',
+        `Processed batch: ${result.successful} successful, ${result.failed} failed`,
+        { 
+          processed: result.processed,
+          successful: result.successful,
+          failed: result.failed,
+          processingTime: result.processingTime,
+          errors: result.errors
+        }
+      )
+
+      console.log(`✅ Queue batch processed: ${result.successful} successful, ${result.failed} failed (${result.processingTime}ms)`)
+      return result
+
+    } catch (error) {
+      result.processingTime = Date.now() - startTime
+      await this.logQueueOperation('QUEUE_PROCESS_BATCH', 'ERROR',
+        `Queue processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { error: error instanceof Error ? error.message : 'Unknown error', processingTime: result.processingTime }
+      )
+      throw error
+    } finally {
+      this.isProcessing = false
+    }
+  }
+
+  /**
+   * Retry failed queue items
+   */
+  async retryFailed(): Promise<ProcessingResult> {
+    console.log('🔄 Retrying failed AI queue items...')
+
+    // Reset failed items that haven't exceeded max retries
+    const resetCount = await prisma.processingQueue.updateMany({
+      where: {
+        status: QueueStatus.FAILED,
+        retryCount: { lt: prisma.processingQueue.fields.maxRetries }
+      },
+      data: {
+        status: QueueStatus.PENDING,
+        error: null
+      }
+    })
+
+    await this.logQueueOperation('QUEUE_RETRY', 'SUCCESS',
+      `Reset ${resetCount.count} failed items for retry`,
+      { resetCount: resetCount.count }
+    )
+
+    console.log(`🔄 Reset ${resetCount.count} failed items for retry`)
+
+    // Process the retried items
+    return await this.processQueue()
+  }
+
+  /**
+   * Get current queue metrics
+   */
+  async getQueueMetrics(): Promise<QueueMetrics> {
+    const [statusCounts, oldestPending, avgProcessingTime] = await Promise.all([
+      // Count by status
+      prisma.processingQueue.groupBy({
+        by: ['status'],
+        _count: { status: true }
+      }),
+      
+      // Oldest pending item
+      prisma.processingQueue.findFirst({
+        where: { status: QueueStatus.PENDING },
+        orderBy: { queuedAt: 'asc' },
+        select: { queuedAt: true }
+      }),
+
+      // Average processing time from recent logs
+      prisma.processingLog.aggregate({
+        where: {
+          type: 'AI_CLASSIFICATION',
+          status: 'SUCCESS',
+          processingTime: { not: null },
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+        },
+        _avg: { processingTime: true }
+      })
+    ])
+
+    // Convert status counts to metrics
+    const metrics: QueueMetrics = {
+      pending: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+      total: 0,
+      oldestPending: oldestPending?.queuedAt,
+      averageProcessingTime: avgProcessingTime._avg.processingTime || 0,
+      successRate: 0
+    }
+
+    statusCounts.forEach(count => {
+      const status = count.status as QueueStatus
+      const countValue = count._count.status
+      
+      switch (status) {
+        case QueueStatus.PENDING:
+          metrics.pending = countValue
+          break
+        case QueueStatus.PROCESSING:
+          metrics.processing = countValue
+          break
+        case QueueStatus.COMPLETED:
+          metrics.completed = countValue
+          break
+        case QueueStatus.FAILED:
+          metrics.failed = countValue
+          break
+      }
+      metrics.total += countValue
+    })
+
+    // Calculate success rate
+    if (metrics.total > 0) {
+      metrics.successRate = metrics.completed / (metrics.completed + metrics.failed)
+    }
+
+    return metrics
+  }
+
+  /**
+   * Get current queue status
+   */
+  async getQueueStatus(): Promise<QueueStatus> {
+    const metrics = await this.getQueueMetrics()
+    
+    return {
+      isProcessing: this.isProcessing,
+      lastProcessed: await this.getLastProcessedTime(),
+      nextScheduled: new Date(Date.now() + this.processingInterval),
+      workerStatus: this.isProcessing ? 'running' : 'stopped'
+    }
+  }
+
+  /**
+   * Get queue items with optional filtering
+   */
+  async getQueueItems(
+    status?: QueueStatus,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<QueueItem[]> {
+    const where = status ? { status } : {}
+
+    const items = await prisma.processingQueue.findMany({
+      where,
+      include: {
+        article: {
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            url: true,
+            source: true,
+            publishedAt: true,
+            feedId: true,
+            processed: true
+          }
+        }
+      },
+      orderBy: [
+        { priority: 'asc' },
+        { queuedAt: 'desc' }
+      ],
+      take: limit,
+      skip: offset
+    })
+
+    return items.map(item => ({
+      id: item.id,
+      articleId: item.articleId,
+      priority: item.priority,
+      status: item.status,
+      retryCount: item.retryCount,
+      maxRetries: item.maxRetries,
+      error: item.error,
+      queuedAt: item.queuedAt,
+      processedAt: item.processedAt,
+      article: item.article
+    }))
+  }
+
+  /**
+   * Clear completed items older than specified days
+   */
+  async cleanupCompleted(olderThanDays: number = 7): Promise<number> {
+    const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000)
+    
+    const result = await prisma.processingQueue.deleteMany({
+      where: {
+        status: QueueStatus.COMPLETED,
+        processedAt: { lt: cutoffDate }
+      }
+    })
+
+    await this.logQueueOperation('QUEUE_CLEANUP', 'SUCCESS',
+      `Cleaned up ${result.count} completed queue items older than ${olderThanDays} days`,
+      { deletedCount: result.count, cutoffDate }
+    )
+
+    console.log(`🧹 Cleaned up ${result.count} completed queue items`)
+    return result.count
+  }
+
+  // Private helper methods
+
+  private async markItemCompleted(queueItemId: string): Promise<void> {
+    await prisma.processingQueue.update({
+      where: { id: queueItemId },
+      data: {
+        status: QueueStatus.COMPLETED,
+        processedAt: new Date(),
+        error: null
+      }
+    })
+  }
+
+  private async handleProcessingError(queueItem: QueueItem, error: string): Promise<void> {
+    const newRetryCount = queueItem.retryCount + 1
+    const shouldRetry = newRetryCount < queueItem.maxRetries
+
+    await prisma.processingQueue.update({
+      where: { id: queueItem.id },
+      data: {
+        status: shouldRetry ? QueueStatus.PENDING : QueueStatus.FAILED,
+        retryCount: newRetryCount,
+        error: error
+      }
+    })
+
+    // Log the error
+    await this.logQueueOperation('AI_CLASSIFICATION', 'ERROR',
+      `Classification failed (retry ${newRetryCount}/${queueItem.maxRetries}): ${error}`,
+      {
+        articleId: queueItem.articleId,
+        retryCount: newRetryCount,
+        maxRetries: queueItem.maxRetries,
+        willRetry: shouldRetry,
+        error
+      }
+    )
+  }
+
+  private getPriorityWeight(priority: QueuePriority): number {
+    switch (priority) {
+      case QueuePriority.HIGH: return 3
+      case QueuePriority.MEDIUM: return 2
+      case QueuePriority.LOW: return 1
+      default: return 2
+    }
+  }
+
+  private async getLastProcessedTime(): Promise<Date | undefined> {
+    const lastProcessed = await prisma.processingQueue.findFirst({
+      where: { status: QueueStatus.COMPLETED },
+      orderBy: { processedAt: 'desc' },
+      select: { processedAt: true }
+    })
+    return lastProcessed?.processedAt || undefined
+  }
+
+  private async logQueueOperation(
+    type: string,
+    status: string,
+    message: string,
+    details?: any
+  ): Promise<void> {
+    try {
+      await prisma.processingLog.create({
+        data: {
+          type,
+          status,
+          message,
+          details: details || {},
+          processingTime: details?.processingTime || null,
+          articleId: details?.articleId || null
+        }
+      })
+    } catch (error) {
+      console.error('Failed to log queue operation:', error)
+    }
+  }
+}
+
+// Export singleton instance
+export const aiProcessingQueue = new AIProcessingQueue()

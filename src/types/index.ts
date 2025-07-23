@@ -258,5 +258,51 @@ export interface ArticleFormData {
 export type ProcessingStatus = 'idle' | 'processing' | 'completed' | 'error'
 export type FeedHealth = 'healthy' | 'warning' | 'error'
 
+// AI Queue types
+export interface QueueItem {
+  id: string
+  articleId: string
+  priority: 'HIGH' | 'MEDIUM' | 'LOW'
+  status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  retryCount: number
+  maxRetries: number
+  error?: string | null
+  queuedAt: Date
+  processedAt?: Date | null
+  article?: Article
+}
+
+export interface QueueMetrics {
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+  total: number
+  oldestPending?: Date
+  averageProcessingTime: number
+  successRate: number
+}
+
+export interface ProcessingSpeed {
+  articlesPerHour: number
+  averageProcessingTime: number
+  successRate: number
+}
+
+export interface QueueStatus {
+  isProcessing: boolean
+  lastProcessed?: Date
+  nextScheduled?: Date
+  workerStatus: 'running' | 'stopped' | 'error'
+}
+
+export interface ProcessingResult {
+  processed: number
+  successful: number
+  failed: number
+  errors: Array<{ articleId: string; error: string }>
+  processingTime: number
+}
+
 // Export the types defined above
 // These will be replaced by Prisma-generated types in production

@@ -1,4 +1,203 @@
-# Product Requirements Document: AI Discrimination Monitor v2 - Vercel Deployment Preparation
+# RSS AI Processing Pipeline Enhancement - PRD
+
+## Product Overview
+Enhance the AI Discrimination Monitor v2's RSS processing pipeline with comprehensive background AI classification, queue management, and real-time status monitoring. The current system processes 88 RSS feeds but 70 have never been fetched, and AI classification lacks queue management and retry mechanisms.
+
+## Problem Statement
+The current RSS processing system has several critical limitations:
+1. **No Queue Management**: AI classification happens immediately during RSS processing, causing timeouts and failures
+2. **70 Unprocessed Feeds**: 79% of feeds have never been fetched due to processing bottlenecks
+3. **Limited Retry Logic**: Failed AI classifications are not retried automatically
+4. **Poor Visibility**: No real-time monitoring of AI processing status
+5. **API Inefficiency**: Individual API calls for each article instead of batching
+6. **Background Processing Issues**: Current setTimeout approach is unreliable for high volume
+
+## Target Users
+- **System Administrators**: Need visibility into AI processing queue and error handling
+- **Content Managers**: Require reliable AI classification for editorial workflows
+- **Data Analysts**: Need accurate AI classifications for discrimination trend analysis
+- **API Consumers**: Expect consistent article classifications and processing status
+
+## Core Features
+
+### 1. AI Processing Queue System
+**Priority: HIGH**
+- Persistent queue for AI classification tasks with priority levels (HIGH/MEDIUM/LOW)
+- Retry mechanism with exponential backoff for failed classifications
+- Rate limiting to respect AI provider API limits (OpenAI: 10,000 requests/day, Anthropic: 5,000 requests/day)
+- Batch processing to optimize API calls (process 5-10 articles per API call)
+- Queue depth monitoring with alerts when backlog exceeds 1,000 articles
+
+### 2. Enhanced Status Monitoring Dashboard
+**Priority: HIGH**
+- Real-time AI processing dashboard showing queue metrics (pending/processing/completed/failed)
+- Processing speed metrics (articles/hour, average processing time, success rate)
+- Error analysis dashboard with classification failure reasons and retry status
+- Recent activity timeline with detailed processing logs
+- Auto-refresh every 30 seconds for live monitoring
+
+### 3. Background Worker Process
+**Priority: MEDIUM**
+- Dedicated background worker for continuous AI processing
+- Automatic queue processing with configurable batch sizes
+- Health checks and automatic restart logic for reliability
+- Worker start/stop controls in admin interface
+- Integration with RSS processor to auto-queue new articles
+
+### 4. Admin Control Interface
+**Priority: MEDIUM**
+- Queue management controls (pause/resume processing)
+- Bulk operations for reprocessing failed classifications
+- Priority adjustment for urgent articles
+- Manual retry mechanisms for specific articles
+- Performance tuning controls (batch size, processing intervals)
+
+### 5. Bulk Processing for Backlog
+**Priority: HIGH**
+- Process all 70 never-fetched feeds with AI classification
+- Bulk reprocessing functionality for articles with failed/outdated classifications
+- Progress tracking for bulk operations with completion estimates
+- Ability to process specific feed batches to avoid system overload
+
+## Technical Requirements
+
+### Database Schema Enhancements
+- New ProcessingQueue table with priority, status, and retry tracking
+- Enhanced ProcessingLog with queue-specific event types
+- Indexes for efficient queue processing queries
+- Cleanup mechanisms for old processing logs
+
+### API Enhancements
+- POST `/api/ai-queue/process` - Trigger queue processing
+- GET `/api/ai-queue/status` - Queue metrics and status
+- POST `/api/ai-queue/retry` - Retry failed classifications
+- POST `/api/ai-queue/bulk-add` - Add multiple articles to queue
+- GET `/api/background/ai-worker/status` - Background worker status
+
+### Performance Requirements
+- Process 200+ articles/hour (4x current speed)
+- 70% reduction in API calls through batching
+- <5% failed classification rate (with retry)
+- 95% of articles classified within 24 hours
+- <100ms average database query response time
+
+### Integration Requirements
+- RSS processor automatically queues new articles for AI classification
+- Failed RSS fetches trigger individual feed processing
+- Admin dashboard integrated with existing RSS monitoring
+- Real-time updates without impacting user-facing performance
+
+## User Stories
+
+### Admin User Stories
+1. **As an admin**, I want to see real-time AI processing queue status so I can monitor system health
+2. **As an admin**, I want to retry failed AI classifications so I can ensure complete data coverage
+3. **As an admin**, I want to process the 70 never-fetched feeds so all data is properly classified
+4. **As an admin**, I want to control background processing so I can manage system resources
+5. **As an admin**, I want to see error analysis so I can identify and fix processing issues
+
+### System User Stories
+1. **As a system**, I want to automatically queue new articles so AI classification happens reliably
+2. **As a system**, I want to retry failed classifications so data quality is maintained
+3. **As a system**, I want to batch API calls so I stay within provider limits
+4. **As a system**, I want to monitor queue depth so I can alert on processing backlogs
+
+## Success Criteria
+
+### Performance Metrics
+- **Processing Speed**: 200+ articles processed per hour
+- **API Efficiency**: Reduce API calls by 70% through batching
+- **Error Recovery**: 90% of failed classifications recovered via retry
+- **Queue Processing**: 95% of queued articles processed within 24 hours
+
+### Operational Metrics
+- **Backlog Processing**: Successfully process all 70 never-fetched feeds
+- **System Reliability**: 99.9% background processing uptime
+- **Data Integrity**: Zero data loss during queue processing
+- **Admin Efficiency**: 50% reduction in manual processing interventions
+
+### Quality Metrics
+- **Classification Accuracy**: Maintain current 85%+ accuracy with faster processing
+- **Error Rate**: <5% failed classifications after retry attempts
+- **Queue Health**: Queue depth never exceeds 1,000 pending articles
+- **Response Time**: Admin dashboard loads in <2 seconds
+
+## Risk Mitigation
+
+### Technical Risks
+1. **API Rate Limiting**: Implement proper rate limiting and multiple provider support
+2. **Queue Overwhelm**: Priority-based processing with batch limits and monitoring
+3. **Database Performance**: Optimize queries and implement proper indexing
+4. **Worker Reliability**: Health checks and automatic restart mechanisms
+
+### Operational Risks
+1. **Data Quality**: Quality sampling and validation for batch processing
+2. **System Overload**: Gradual rollout with performance monitoring
+3. **Error Handling**: Comprehensive error logging and recovery procedures
+
+## Implementation Phases
+
+### Phase 1: Queue System Foundation (Week 1)
+- Database schema updates and migrations
+- Core queue management implementation
+- Basic API endpoints for queue operations
+- Retry logic with exponential backoff
+
+### Phase 2: Status Monitoring (Week 2)
+- AI Processing Dashboard component
+- Real-time status updates and metrics
+- Error analysis and reporting
+- Admin control interface
+
+### Phase 3: Background Worker (Week 3)
+- Background worker implementation
+- RSS processor integration
+- Worker health monitoring
+- Automatic processing controls
+
+### Phase 4: Optimization & Testing (Week 4)
+- Performance optimization and batching
+- Comprehensive testing suite
+- Documentation and deployment
+- Monitoring and alerting setup
+
+## Acceptance Testing
+
+### Functional Testing
+- Queue operations (add, process, retry) work correctly
+- Background worker processes articles automatically
+- Admin dashboard shows accurate real-time status
+- Bulk processing handles large batches without errors
+
+### Performance Testing  
+- System handles 200+ articles/hour processing
+- Database queries remain under 100ms response time
+- API rate limits are respected and not exceeded
+- Memory usage remains stable during bulk operations
+
+### Integration Testing
+- RSS processor integration queues new articles
+- Failed classifications are automatically retried
+- Admin controls work without impacting processing
+- Real-time updates don't degrade user experience
+
+## Monitoring & Analytics
+
+### Key Metrics Dashboard
+- Queue depth and processing rate trends
+- AI classification success/failure rates
+- API usage and rate limit compliance
+- Background worker health and uptime
+- Processing speed and efficiency metrics
+
+### Alerting Thresholds
+- Queue depth > 1,000 articles
+- Processing failure rate > 10%
+- Background worker down > 5 minutes
+- API rate limits approaching (80% usage)
+- Database query time > 500ms
+
+This PRD defines a comprehensive enhancement to the RSS AI processing pipeline that will address current bottlenecks, improve reliability, and provide the visibility needed for effective system management.: AI Discrimination Monitor v2 - Vercel Deployment Preparation
 
 ## Project Overview
 Prepare the AI Discrimination Monitor v2 project for stable production deployment to Vercel, ensuring all issues are resolved and the codebase is production-ready.

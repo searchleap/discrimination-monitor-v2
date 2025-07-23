@@ -2,6 +2,7 @@ import Parser from 'rss-parser'
 import { PrismaClient } from '@prisma/client'
 import { createHash } from 'crypto'
 import { AIClassifier } from './ai-classifier'
+import { aiProcessingQueue } from './ai-queue'
 
 const parser = new Parser({
   customFields: {
@@ -270,29 +271,16 @@ export class RSSProcessor {
         }
       })
 
-      // Queue AI classification if enabled (non-blocking)
+      // Queue AI classification if enabled (using the new queue system)
       if (this.enableAIClassification) {
-        // Don't await - let this happen in background
-        this.queueAIClassification(newArticle.id, {
-          id: newArticle.id,
-          title: item.title,
-          content: cleanContent,
-          url: item.link,
-          source: sourceName,
-          publishedAt,
-          feedId,
-          location: 'NATIONAL',
-          discriminationType: 'GENERAL_AI',
-          severity: 'MEDIUM',
-          organizations: [],
-          keywords,
-          processed: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }).catch(error => {
-          // Log but don't throw - this runs async
-          console.warn(`⚠️  Background AI classification queuing failed for article ${newArticle.id}:`, error instanceof Error ? error.message : error)
-        })
+        try {
+          // Add to AI processing queue with MEDIUM priority for new articles
+          await aiProcessingQueue.addToQueue(newArticle.id, 'MEDIUM')
+          console.log(`🔄 Added article ${newArticle.id} to AI processing queue`)
+        } catch (error) {
+          // Log but don't throw - this should not fail RSS processing
+          console.warn(`⚠️  Failed to add article ${newArticle.id} to AI queue:`, error instanceof Error ? error.message : error)
+        }
       }
 
       return { isNew: true }
@@ -361,84 +349,7 @@ export class RSSProcessor {
     return feed?.successRate || 0.0
   }
 
-  /**
-   * Queue AI classification to run in background (non-blocking)
-   */
-  private async queueAIClassification(articleId: string, articleData: any): Promise<void> {
-    // Use setTimeout to ensure this runs after the current event loop
-    setTimeout(async () => {
-      try {
-        await this.classifyArticle(articleId, articleData)
-      } catch (error) {
-        // Log AI classification error but don't propagate
-        console.warn(`⚠️  Background AI classification failed for article ${articleId}:`, error instanceof Error ? error.message : error)
-        await this.logProcessing('AI_CLASSIFICATION', 'ERROR', 
-          `Background AI classification failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          { articleId, feedId: articleData.feedId }
-        ).catch(() => {}) // Ignore logging errors
-      }
-    }, 100) // Small delay to ensure RSS processing completes first
-  }
-
-  /**
-   * Classify an article using AI (synchronous for admin interface)
-   */
-  private async classifyArticle(articleId: string, articleData: any): Promise<void> {
-    const startTime = Date.now()
-    
-    try {
-      const classification = await this.aiClassifier.classifyArticle(articleData)
-      const processingTime = Date.now() - startTime
-
-      // Update article with AI classification
-      await prisma.article.update({
-        where: { id: articleId },
-        data: {
-          location: classification.location,
-          discriminationType: classification.discriminationType,
-          severity: classification.severity,
-          confidenceScore: classification.confidenceScore,
-          organizations: classification.entities.organizations,
-          keywords: [...(articleData.keywords || []), ...classification.keywords],
-          entities: classification.entities,
-          processed: true,
-          aiClassification: {
-            reasoning: classification.reasoning,
-            entities: classification.entities,
-            timestamp: new Date().toISOString(),
-            processingTime,
-            provider: process.env.OPENAI_API_KEY ? 'openai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fallback'
-          }
-        }
-      })
-
-      // Log successful classification
-      await this.logProcessing('AI_CLASSIFICATION', 'SUCCESS',
-        `Article classified as ${classification.discriminationType}/${classification.severity}`,
-        { 
-          articleId, 
-          classification, 
-          processingTime,
-          confidenceScore: classification.confidenceScore
-        }
-      )
-
-      console.log(`🤖 AI classified article "${articleData.title}": ${classification.discriminationType}/${classification.severity} (${Math.round(classification.confidenceScore * 100)}% confidence)`)
-    } catch (error) {
-      const processingTime = Date.now() - startTime
-      
-      // Update article to mark as processed but with error
-      await prisma.article.update({
-        where: { id: articleId },
-        data: {
-          processed: true,
-          processingError: error instanceof Error ? error.message : 'Unknown AI classification error'
-        }
-      }).catch(console.error)
-
-      throw error // Re-throw to be handled by caller
-    }
-  }
+  // Remove the old AI classification methods - now handled by the queue system
 
   /**
    * Log processing events

@@ -70,6 +70,7 @@ model Article {
   
   // Relations
   feed              Feed                @relation(fields: [feedId], references: [id], onDelete: Cascade)
+  processingQueue   ProcessingQueue?
   
   @@index([location, publishedAt])
   @@index([discriminationType])
@@ -81,8 +82,8 @@ model Article {
 
 model ProcessingLog {
   id              String    @id @default(cuid())
-  type            String    // "RSS_FETCH", "AI_CLASSIFICATION", "DUPLICATE_CHECK"
-  status          String    // "SUCCESS", "ERROR", "WARNING"
+  type            String    // "RSS_FETCH", "AI_CLASSIFICATION", "DUPLICATE_CHECK", "QUEUE_PROCESSING"
+  status          String    // "SUCCESS", "ERROR", "WARNING", "IN_PROGRESS"
   message         String?
   details         Json?
   processingTime  Int?      // milliseconds
@@ -95,6 +96,25 @@ model ProcessingLog {
   
   @@index([type, status])
   @@index([createdAt])
+}
+
+model ProcessingQueue {
+  id          String        @id @default(cuid())
+  articleId   String        @unique
+  priority    QueuePriority @default(MEDIUM)
+  status      QueueStatus   @default(PENDING)
+  retryCount  Int          @default(0)
+  maxRetries  Int          @default(3)
+  error       String?
+  queuedAt    DateTime     @default(now())
+  processedAt DateTime?
+  
+  // Relations
+  article     Article      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  
+  @@index([status, priority])
+  @@index([queuedAt])
+  @@index([processedAt])
 }
 
 model SystemMetrics {
@@ -165,4 +185,17 @@ enum SeverityLevel {
   LOW
   MEDIUM
   HIGH
+}
+
+enum QueuePriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum QueueStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
