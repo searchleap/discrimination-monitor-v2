@@ -122,12 +122,22 @@ export function AIProcessingMonitor() {
     try {
       const [statusResponse, bulkResponse, workerResponse] = await Promise.all([
         fetch('/api/ai-queue/status'),
-        fetch('/api/ai-queue/bulk-add'),
+        fetch('/api/ai-queue/bulk-add'), 
         fetch('/api/background/ai-worker/status')
       ])
 
-      if (!statusResponse.ok || !bulkResponse.ok || !workerResponse.ok) {
-        throw new Error('Failed to fetch AI processing data')
+      // Check each response individually to provide specific error messages
+      if (!statusResponse.ok) {
+        const errorText = await statusResponse.text()
+        throw new Error(`AI Queue Status API failed (${statusResponse.status}): ${errorText}`)
+      }
+      if (!bulkResponse.ok) {
+        const errorText = await bulkResponse.text()
+        throw new Error(`Bulk Add API failed (${bulkResponse.status}): ${errorText}`)
+      }
+      if (!workerResponse.ok) {
+        const errorText = await workerResponse.text()
+        throw new Error(`AI Worker Status API failed (${workerResponse.status}): ${errorText}`)
       }
 
       const statusData = await statusResponse.json()
