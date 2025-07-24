@@ -1,9 +1,28 @@
 # Changelog
 
-All notable changes to the AI Discrimination Monitoring Dashboard will be documented in this file.
+All notable changes to the Discrimination Monitoring Dashboard will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.3.0] - 2025-01-24
+
+### Changed
+#### 🎨 Generic Branding Implementation
+- **Platform Rebranding**: Removed AI-specific references throughout the platform
+- **Updated Product Name**: Changed from "AI Discrimination Monitoring Dashboard" to "Discrimination Monitoring Dashboard"
+- **Logo Update**: Navigation logo changed from "AI" to "DM" (Discrimination Monitor)
+- **Metadata Refresh**: All page titles and descriptions updated for generic discrimination monitoring
+- **Legal Documents**: Updated terms, privacy policy, and accessibility statement language
+- **Sample Content**: Modified 14 mock articles to remove AI-specific references while maintaining discrimination focus
+- **SEO Keywords**: Updated to include "equality" instead of "AI" for broader relevance
+- **Package Configuration**: Renamed from `ai-discrimination-dashboard` to `discrimination-monitor-dashboard`
+
+#### ✅ Technical Verification
+- All existing functionality preserved
+- Build process unaffected
+- No breaking changes to API or database
+- Consistent branding across all components
 
 ## [3.2.0] - 2025-07-23
 
