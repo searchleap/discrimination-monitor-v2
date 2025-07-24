@@ -9,7 +9,7 @@ export default function AccessibilityPage() {
         <section className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">Our Commitment</h2>
           <p className="text-gray-700 leading-relaxed mb-4">
-            The AI Discrimination Monitor is committed to ensuring digital accessibility for 
+            The Discrimination Monitor is committed to ensuring digital accessibility for 
             all users, including those with disabilities. We strive to adhere to Web Content 
             Accessibility Guidelines (WCAG) 2.1 Level AA standards.
           </p>

@@ -3,7 +3,7 @@ import { AdminPanel } from '@/components/dashboard/AdminPanel'
 import { Loading } from '@/components/ui/Loading'
 
 export const metadata = {
-  title: 'Admin - AI Discrimination Monitor',
+  title: 'Admin - Discrimination Monitor',
   description: 'System administration and configuration management',
 }
 

@@ -3,8 +3,8 @@ import SimpleEnhancedAnalytics from '@/components/analytics/SimpleEnhancedAnalyt
 import { Loading } from '@/components/ui/Loading'
 
 export const metadata = {
-  title: 'Enhanced Analytics - AI Discrimination Monitor',
-  description: 'Deep analytics and insights into AI discrimination patterns, trends, and geographic distribution.',
+  title: 'Enhanced Analytics - Discrimination Monitor',
+  description: 'Deep analytics and insights into discrimination patterns, trends, and geographic distribution.',
 }
 
 export default function AnalyticsPage() {

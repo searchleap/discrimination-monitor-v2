@@ -9,10 +9,10 @@ export default function TermsPage() {
         <section className="mb-8">
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. Service Description</h2>
           <p className="text-gray-700 leading-relaxed mb-4">
-            The AI Discrimination Monitor is a platform designed to track, analyze, and report on 
-            discrimination-related incidents involving artificial intelligence systems. This service 
-            aggregates public information from various sources to provide insights into AI bias and 
-            discrimination patterns.
+            The Discrimination Monitor is a platform designed to track, analyze, and report on 
+            discrimination-related incidents across various sectors and contexts. This service 
+            aggregates public information from various sources to provide insights into discrimination 
+            patterns affecting protected groups.
           </p>
         </section>
 

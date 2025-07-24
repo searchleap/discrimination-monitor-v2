@@ -9,8 +9,8 @@ export function Footer() {
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-4">About</h3>
             <p className="text-sm text-gray-600">
-              Real-time monitoring system for tracking AI-related discrimination incidents 
-              affecting disability, racial, religious communities, and general AI discrimination concerns.
+              Real-time monitoring system for tracking discrimination incidents 
+              affecting disability, racial, religious communities, and other protected groups.
             </p>
           </div>
 

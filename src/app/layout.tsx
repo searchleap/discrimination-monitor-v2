@@ -5,9 +5,9 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AI Discrimination Monitoring Dashboard',
-  description: 'Real-time monitoring system for tracking AI-related discrimination incidents affecting disability, racial, religious communities, and general AI discrimination concerns.',
-  keywords: ['AI', 'discrimination', 'monitoring', 'civil rights', 'Michigan', 'dashboard'],
+  title: 'Discrimination Monitoring Dashboard',
+  description: 'Real-time monitoring system for tracking discrimination incidents affecting disability, racial, religious communities, and other protected groups.',
+  keywords: ['discrimination', 'monitoring', 'civil rights', 'Michigan', 'dashboard', 'equality'],
   authors: [{ name: 'Michigan Department of Civil Rights' }],
   robots: 'noindex, nofollow', // Prevent indexing during development
 }

@@ -10,7 +10,7 @@ export default function PrivacyPage() {
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">1. Information We Collect</h2>
           <p className="text-gray-700 leading-relaxed mb-4">
             Our system processes publicly available information from RSS feeds, news sources, 
-            and other public data sources related to AI discrimination incidents. We do not 
+            and other public data sources related to discrimination incidents. We do not 
             collect personal information from users beyond basic system logs.
           </p>
         </section>
@@ -19,12 +19,12 @@ export default function PrivacyPage() {
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">2. How We Use Information</h2>
           <p className="text-gray-700 leading-relaxed mb-4">
             Information is used solely for the purpose of monitoring, analyzing, and reporting 
-            on AI discrimination trends. This includes:
+            on discrimination trends. This includes:
           </p>
           <ul className="list-disc ml-6 text-gray-700 mb-4">
             <li>Categorizing and classifying discrimination incidents</li>
             <li>Generating analytics and trend reports</li>
-            <li>Improving AI classification accuracy</li>
+            <li>Improving content classification accuracy</li>
             <li>Providing educational resources</li>
           </ul>
         </section>

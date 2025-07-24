@@ -3,8 +3,8 @@ import { ArticleManagement } from '@/components/dashboard/ArticleManagement'
 import { Loading } from '@/components/ui/Loading'
 
 export const metadata = {
-  title: 'Articles - AI Discrimination Monitor',
-  description: 'Manage and review AI-related discrimination articles',
+  title: 'Articles - Discrimination Monitor',
+  description: 'Manage and review discrimination-related articles',
 }
 
 export default function ArticlesPage() {

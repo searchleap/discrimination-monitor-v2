@@ -1,6 +1,6 @@
-# AI Discrimination Monitoring Dashboard v2.0
+# Discrimination Monitoring Dashboard v2.0
 
-A modern, scalable real-time monitoring system for tracking AI-related discrimination incidents affecting disability, racial, religious communities, and general AI discrimination concerns. Built for Michigan Department of Civil Rights officials, advocacy organizations, and research institutions.
+A modern, scalable real-time monitoring system for tracking discrimination incidents affecting disability, racial, religious communities, and other protected groups. Built for Michigan Department of Civil Rights officials, advocacy organizations, and research institutions.
 
 ## 🎯 Quick Start
 
