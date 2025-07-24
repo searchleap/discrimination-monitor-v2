@@ -35,7 +35,7 @@ const metricTemplates = [
     color: 'text-blue-600',
     bgColor: 'bg-blue-50',
     description: 'Last 30 days',
-    info: 'AI discrimination incidents specifically occurring in Michigan. These are prioritized for immediate attention by local civil rights officials and advocates.',
+    info: 'Discrimination incidents specifically occurring in Michigan. These are prioritized for immediate attention by local civil rights officials and advocates.',
     filter: { location: 'MICHIGAN' },
     filterLabel: 'Michigan incidents',
   },
@@ -46,7 +46,7 @@ const metricTemplates = [
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
     description: 'Last 30 days',
-    info: 'AI discrimination incidents across the United States, including federal policy changes, nationwide corporate practices, and broader civil rights concerns.',
+    info: 'Discrimination incidents across the United States, including federal policy changes, nationwide corporate practices, and broader civil rights concerns.',
     filter: { location: 'NATIONAL' },
     filterLabel: 'National incidents',
   },
@@ -57,7 +57,7 @@ const metricTemplates = [
     color: 'text-gray-600',
     bgColor: 'bg-gray-50',
     description: 'Last 30 days',
-    info: 'Global AI discrimination incidents that may influence U.S. policy, provide legal precedents, or represent emerging trends in AI governance worldwide.',
+    info: 'Global discrimination incidents that may influence U.S. policy, provide legal precedents, or represent emerging trends in governance worldwide.',
     filter: { location: 'INTERNATIONAL' },
     filterLabel: 'International incidents',
   },
@@ -237,10 +237,10 @@ export function HeroMetrics() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            AI Discrimination Monitoring Dashboard
+            Discrimination Monitoring Dashboard
           </h1>
           <p className="text-gray-600">
-            Real-time tracking of AI-related discrimination incidents across Michigan and beyond
+            Real-time tracking of discrimination incidents across Michigan and beyond
           </p>
         </div>
         <div className="text-right">
