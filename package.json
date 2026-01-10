@@ -56,7 +56,7 @@
     "d3-scale": "^4.0.2",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.453.0",
-    "next": "^15.1.5",
+    "next": "15.1.11",
     "nodemailer": "^7.0.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
